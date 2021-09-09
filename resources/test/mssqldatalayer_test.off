@@ -1,0 +1,64 @@
+package server
+
+import (
+	"encoding/json"
+	"io/ioutil"
+	"os"
+	"testing"
+)
+
+func TestMain(m *testing.M) {
+	resultCode := m.Run()
+	os.Exit(resultCode)
+}
+
+func TestGetChanges(t *testing.T) {
+
+	configFileName := "./local.config.json"
+	configFile, err := os.Open(configFileName)
+	if err != nil {
+		panic("Unable to open config file: " + configFileName)
+	}
+	defer configFile.Close()
+	configDataBytes, _ := ioutil.ReadAll(configFile)
+
+	config := &Configuration{}
+	err = json.Unmarshal(configDataBytes, config)
+	if err != nil {
+		panic("Unable to parse json into config. Error is: " + err.Error() + ". Please check file: " + configFileName)
+	}
+
+	layer := NewLayer(config)
+
+	datasetNames := layer.GetDatasetNames()
+	if len(datasetNames) != 1 {
+		t.Fail()
+	}
+
+	entities := make([]*Entity, 0)
+	layer.GetChanges("Customer", "", func(entity *Entity) {
+		entities = append(entities, entity)
+	})
+
+	if len(entities) != 847 {
+		t.Fail()
+	}
+
+	addresses := make([]*Entity, 0)
+	layer.GetChanges("Address", "", func(entity *Entity) {
+		addresses = append(addresses, entity)
+	})
+
+	if len(addresses) != 847 {
+		t.Fail()
+	}
+
+	products := make([]*Entity, 0)
+	layer.GetChanges("Product", "", func(entity *Entity) {
+		products = append(products, entity)
+	})
+
+	if len(products) != 847 {
+		t.Fail()
+	}
+}

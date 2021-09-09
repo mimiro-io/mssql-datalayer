@@ -1,0 +1,63 @@
+{
+    "databaseServer" : "test.database.windows.net",
+    "baseUri" : "http://data.test.io/test/",
+    "database" : "datahubtest",
+    "port" : "1433",
+    "schema" : "SalesLT",
+    "password" : "password",
+    "user" : "testy.mctesterson",
+    "tableMappings" : [
+        {
+            "tableName" : "Address",
+            "entityIdConstructor" : "addresses/%s",
+            "types" : [ "http://data.test.io/testnamespace/Customer" ],
+            "columnMappings" : [
+                {
+                    "fieldName": "AddressId",
+                    "isIdColumn" : true
+
+                }
+            ]
+        },
+        {
+            "tableName" : "Product",
+            "entityIdConstructor" : "products/%s",
+            "types" : [ "http://data.test.io/testnamespace/Product" ],
+            "columnMappings" : [
+                {
+                    "fieldName": "ProductId",
+                    "isIdColumn" : true
+                },
+                {
+                    "fieldName": "ProductCategoryID",
+                    "isReference" : true,
+                    "referenceTemplate" : "http://data.test.io/testnamespace/categories/%s"
+                }
+            ]
+        },
+        {
+            "tableName" : "Customer",
+            "entityIdConstructor" : "customers/%s",
+            "types" : [ "http://data.test.io/testnamespace/Customer" ],
+            "columnMappings" : [
+                {
+                    "fieldName": "CustomerId",
+                    "isIdColumn" : true
+                },
+                {
+                    "fieldName": "PasswordHash",
+                    "ignoreColumn" : true
+                },
+                {
+                    "fieldName": "PasswordSalt",
+                    "ignoreColumn" : true
+                },
+                {
+                    "fieldName": "SalesPerson",
+                    "propertyName" : "SalesPersonName"
+                }
+            ]
+        }
+    ]
+}
+

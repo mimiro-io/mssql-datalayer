@@ -1,0 +1,41 @@
+{
+    "id": "mssql-server",
+    "databaseServer": "mssql-server",
+    "baseUri": "https://data.test.io/mssql-server",
+    "database": "test",
+    "port": "1433",
+    "schema": "dbo",
+    "user": "user1",
+    "password": "password1",
+    "baseNameSpace": "https://data.test.io/mssql-server",
+    "tableMappings": [
+      {
+        "tableName": "customers",
+        "nameSpace": "customer",
+        "entityIdConstructor": "customers/%s",
+        "types": [
+          "http://data.test.io/customer"
+        ],
+        "columnMappings": [
+          {
+            "fieldName": "Id",
+            "isIdColumn": true
+          }
+        ]
+      },
+      {
+          "tableName": "rders",
+          "nameSpace": "order",
+          "entityIdConstructor": "orders/%s",
+          "types": [
+              "http://data.test.io/order"
+          ],
+          "columnMappings": [
+              {
+                  "fieldName": "Id",
+                  "isIdColumn": true
+              }
+          ]
+      }
+    ]
+  }
