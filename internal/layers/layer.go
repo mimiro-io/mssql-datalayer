@@ -201,7 +201,7 @@ func buildRowType(cols []string, colTypes []*sql.ColumnType) []interface{} {
 		switch ctType {
 		case "INT", "SMALLINT", "TINYINT":
 			nullableRowData[i] = new(sql.NullInt64)
-		case "VARCHAR", "NVARCHAR", "TEXT", "NTEXT":
+		case "VARCHAR", "NVARCHAR", "TEXT", "NTEXT", "CHAR":
 			nullableRowData[i] = new(sql.NullString)
 		case "DATETIME", "DATE":
 			nullableRowData[i] = new(sql.NullTime)
@@ -297,7 +297,7 @@ func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.C
 			entity.Properties[colName] = nil
 
 			switch ctName {
-			case "VARCHAR", "NVARCHAR", "TEXT", "NTEXT":
+			case "VARCHAR", "NVARCHAR", "TEXT", "NTEXT", "CHAR":
 				ptrToNullString := raw.(*sql.NullString)
 				if (*ptrToNullString).Valid {
 					val = (*ptrToNullString).String
@@ -348,7 +348,7 @@ func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.C
 					entity.Properties[colName] = false // default to false
 				}
 			default:
-				l.logger.Infof("Got: %s for %s", ctName, colName)
+				l.logger.Errorf("Got: %s for %s", ctName, colName)
 			}
 
 			if colMapping != nil {
