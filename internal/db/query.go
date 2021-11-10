@@ -68,15 +68,18 @@ type CustomSinceQuery struct {
 }
 
 func (q CustomSinceQuery) BuildQuery() string {
-	date := "1970-01-01"
+	date := fmt.Sprintf("DATETIMEFROMPARTS( %d, %d, %d, %d, %d, %d, %d)",
+		1970, 01, 01, 00, 00, 00, 000)
 	data, err := base64.StdEncoding.DecodeString(q.Request.Since)
 	if err == nil && string(data) != "" {
 		dt, _ := time.Parse(time.RFC3339, string(data))
-		date = fmt.Sprintf("DATETIMEFROMPARTS( %d, %d, %d, %d, %d, %d, 0)",
-			dt.Year(), dt.Month(), dt.Day(), dt.Hour(), dt.Minute(), dt.Second())
+		date = fmt.Sprintf("DATETIMEFROMPARTS( %d, %d, %d, %d, %d, %d, %d)",
+			dt.Year(), dt.Month(), dt.Day(), dt.Hour(), dt.Minute(), dt.Second(), dt.Nanosecond() / 1000000)
 	}
+
 	replaceQuery := strings.Replace(q.TableDef.CustomQuery, "{{ since }}", date, 1)
 	query := replaceQuery
+
 	return query
 }
 

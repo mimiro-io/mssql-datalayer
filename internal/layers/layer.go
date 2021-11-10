@@ -378,15 +378,13 @@ func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.C
 func getSince(db *sql.DB, tableDef *conf.TableMapping) (string, error) {
 	s := ""
 	if tableDef.SinceColumn != "" {
-		var dt sql.NullTime
+		var dt time.Time
 		row := db.QueryRow(fmt.Sprintf("SELECT MAX(%s) from %s", tableDef.SinceColumn, tableDef.TableName))
 		err := row.Scan(&dt)
 		if err != nil {
 			return "", err
 		}
-		if dt.Valid {
-			s = fmt.Sprintf("%s", dt.Time.Format(time.RFC3339))
-		}
+		s = fmt.Sprintf("%s", dt.Format("2006-01-02T15:04:05.000Z"))
 	} else {
 		var dt time.Time
 		row := db.QueryRow("SELECT GETDATE()")
