@@ -203,7 +203,7 @@ func buildRowType(cols []string, colTypes []*sql.ColumnType) []interface{} {
 			nullableRowData[i] = new(sql.NullInt64)
 		case "VARCHAR", "NVARCHAR", "TEXT", "NTEXT", "CHAR":
 			nullableRowData[i] = new(sql.NullString)
-		case "DATETIME", "DATE":
+		case "DATETIME", "DATE", "DATETIME2":
 			nullableRowData[i] = new(sql.NullTime)
 		case "MONEY", "DECIMAL", "FLOAT":
 			nullableRowData[i] = new(sql.NullFloat64)
@@ -311,7 +311,7 @@ func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.C
 					val = uid.String()
 					entity.Properties[colName] = val
 				}
-			case "DATETIME", "DATE":
+			case "DATETIME", "DATE", "DATETIME2":
 				ptrToNullDatetime := raw.(*sql.NullTime)
 				if (*ptrToNullDatetime).Valid {
 					val = (*ptrToNullDatetime).Time
