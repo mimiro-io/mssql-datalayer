@@ -53,7 +53,7 @@ func NewLayer(lc fx.Lifecycle, cmgr *conf.ConfigurationManager, env *conf.Env, s
 	layer.Repo = &Repository{
 		ctx: context.Background(),
 	}
-	_ = layer.ensureConnection(nil) // ok with error here
+	_ = layer.EnsureConnection(nil) // ok with error here
 
 	lc.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {
@@ -123,7 +123,14 @@ func (l *Layer) ChangeSet(request db.DatasetRequest, callBack func(*Entity)) err
 		return nil
 	}
 
-	err := l.ensureConnection(tableDef)
+	if tableDef.CustomQuery != "" {
+		if !strings.Contains(tableDef.CustomQuery, "%s") {
+			l.logger.Error("custom query defined, but missing required '%s' for limit injection")
+			return nil
+		}
+	}
+
+	err := l.EnsureConnection(tableDef)
 	if err != nil {
 		return err
 	}
@@ -220,7 +227,7 @@ func (l *Layer) er(err error) {
 	l.logger.Warnf("Got error %s", err)
 }
 
-func (l *Layer) ensureConnection(table *conf.TableMapping) error {
+func (l *Layer) EnsureConnection(table *conf.TableMapping) error {
 	l.logger.Debug("Ensuring connection")
 	if l.cmgr.State.Digest != l.Repo.digest {
 		l.logger.Debug("Configuration has changed need to reset connection")
