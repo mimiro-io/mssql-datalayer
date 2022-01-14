@@ -131,6 +131,14 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 		return c.NoContent(http.StatusNotFound)
 	}
 
+	// ensure db connection before starting json stream
+	tableDef := handler.layer.GetTableDefinition(datasetName)
+
+	err = handler.layer.EnsureConnection(tableDef)
+	if err != nil {
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
 	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	c.Response().WriteHeader(http.StatusOK)
 	enc := json.NewEncoder(c.Response())
