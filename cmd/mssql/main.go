@@ -20,12 +20,14 @@ func main() {
 			security.NewTokenProviders,
 			conf.NewConfigurationManager,
 			layers.NewLayer,
+			layers.NewPostLayer,
 			web.NewWebServer,
 			web.NewMiddleware,
 		),
 		fx.Invoke(
 			web.Register,
 			web.NewDatasetHandler,
+			web.NewPostHandler,
 		),
 	)
 

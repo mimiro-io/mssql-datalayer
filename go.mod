@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/DataDog/datadog-go v4.8.3+incompatible
 	github.com/bamzi/jobrunner v1.0.0
-	github.com/denisenkom/go-mssqldb v0.0.0-20200910202707-1e08a3fab204
+	github.com/denisenkom/go-mssqldb v0.12.0
 	github.com/franela/goblin v0.0.0-20210113153425-413781f5e6c8
 	github.com/goburrow/cache v0.1.2
 	github.com/gojektech/heimdall/v6 v6.1.0
@@ -21,11 +21,13 @@ require (
 
 require (
 	github.com/Microsoft/go-winio v0.5.1 // indirect
+	github.com/bcicen/jstream v1.0.1 // indirect
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/gojektech/valkyrie v0.0.0-20190210220504-8f62c1e7ba45 // indirect
 	github.com/golang-sql/civil v0.0.0-20190719163853-cb61b32ac6fe // indirect
+	github.com/golang-sql/sqlexp v0.0.0-20170517235910-f1bb20e5a188 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/labstack/gommon v0.3.0 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect

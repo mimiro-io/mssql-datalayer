@@ -18,6 +18,7 @@ type Datalayer struct {
 	Password       string          `json:"password"`
 	Instance       string          `json:"instance"`
 	TableMappings  []*TableMapping `json:"tableMappings"`
+	PostMappings   []*PostMapping  `json:"postMappings"`
 }
 
 type TableMapping struct {
@@ -40,6 +41,21 @@ type ColumnMapping struct {
 	IsReference       bool   `json:"isReference"`
 	ReferenceTemplate string `json:"referenceTemplate"`
 	IgnoreColumn      bool   `json:"ignoreColumn"`
+}
+
+type PostMapping struct {
+	DatasetName   string          `json:"datasetName"`
+	TableName     string          `json:"tableName"`
+	Query         string          `json:"query"`
+	Config        *TableConfig    `json:"config"`
+	FieldMappings []*FieldMapping `json:"fieldMappings"`
+}
+
+type FieldMapping struct {
+	FieldName  string `json:"fieldName"`
+	ToSqlField string `json:"toSqlField"`
+	SortOrder  int    `json:"order"`
+	Type       string `json:"type"`
 }
 
 type TableConfig struct {
@@ -84,6 +100,58 @@ func (layer *Datalayer) GetUrl(table *TableMapping) *url.URL {
 		}
 		if table.Config.Password != nil {
 			password = table.Config.Password.GetValue()
+		}
+		if table.Config.Instance != nil {
+			instance = *table.Config.Instance
+		}
+	}
+
+	query := url.Values{}
+	query.Add("database", database)
+	query.Add("packet size", "32767")
+	//query.Add("log", "32")
+	u := &url.URL{}
+	if instance != "" {
+		u = &url.URL{
+			Scheme:   "sqlserver",
+			User:     url.UserPassword(user, password),
+			Host:     server,
+			Path:     instance, // if connecting to an instance instead of a port
+			RawQuery: query.Encode(),
+		}
+	} else {
+		u = &url.URL{
+			Scheme: "sqlserver",
+			User:   url.UserPassword(user, password),
+			Host:   fmt.Sprintf("%s:%s", server, port),
+			//Path:     instance, // if connecting to an instance instead of a port
+			RawQuery: query.Encode(),
+		}
+	}
+	return u
+}
+func (layer *Datalayer) GetPostUrl(table *PostMapping) *url.URL {
+	database := layer.Database
+	port := layer.Port
+	server := layer.DatabaseServer
+	user := layer.User
+	password := layer.Password
+	instance := layer.Instance
+	if table.Config != nil {
+		if table.Config.Database != nil {
+			database = *table.Config.Database
+		}
+		if table.Config.Port != nil {
+			port = *table.Config.Port
+		}
+		if table.Config.DatabaseServer != nil {
+			server = *table.Config.DatabaseServer
+		}
+		if table.Config.User != nil {
+			user = table.Config.User.Key
+		}
+		if table.Config.Password != nil {
+			password = table.Config.Password.Key
 		}
 		if table.Config.Instance != nil {
 			instance = *table.Config.Instance
