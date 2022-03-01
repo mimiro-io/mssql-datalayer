@@ -87,7 +87,7 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 	}
 	postLayer.logger.Debug(query)
 
-	queryDel := fmt.Sprintf(`DELETE FROM %s WHERE id = 1;`, strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
+	queryDel := fmt.Sprintf(`DELETE FROM %s WHERE id =`, strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
 	postLayer.logger.Debug(queryDel)
 
 	fields := postLayer.PostRepo.postTableDef.FieldMappings
@@ -116,41 +116,45 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 		if !strings.ContainsAny(post.ID, ":") {
 			continue
 		}
-
-		buildQuery += fmt.Sprintf("MERGE %s WITH(HOLDLOCK) as target using (values(", strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
-		s := post.StripProps()
-		args := make([]interface{}, len(fields)+1)
-		args[0] = strings.SplitAfter(post.ID, ":")[1]
 		rowId := strings.SplitAfter(post.ID, ":")[1]
-		columnNames := ""
-		columnValues := ""
-		InsertColumnNamesValues := ""
-		for i, field := range fields {
+		if !post.IsDeleted { //If is deleted True --> Do not store
 
-			args[i+1] = s[field.FieldName]
-			if s[field.FieldName] == nil {
-				continue
+			buildQuery += fmt.Sprintf("MERGE %s WITH(HOLDLOCK) as target using (values(", strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
+			s := post.StripProps()
+			args := make([]interface{}, len(fields)+1)
+			args[0] = strings.SplitAfter(post.ID, ":")[1]
+			rowId = rowId
+			columnNames := ""
+			columnValues := ""
+			InsertColumnNamesValues := ""
+			for i, field := range fields {
+
+				args[i+1] = s[field.FieldName]
+				if s[field.FieldName] == nil {
+					continue
+				}
+				switch s[field.FieldName].(type) {
+				case float64:
+					columnValues += fmt.Sprintf("%f,", s[field.FieldName])
+				case int:
+					columnValues += fmt.Sprintf("%s,", s[field.FieldName])
+				default:
+					columnValues += fmt.Sprintf("'%s',", s[field.FieldName])
+				}
+
+				columnNames += fmt.Sprintf("%s,", field.FieldName)
+				InsertColumnNamesValues += fmt.Sprintf("%s = source.%s, ", field.FieldName, field.FieldName)
+
 			}
-			switch s[field.FieldName].(type) {
-			case float64:
-				columnValues += fmt.Sprintf("%f,", s[field.FieldName])
-			case int:
-				columnValues += fmt.Sprintf("%s,", s[field.FieldName])
-			default:
-				columnValues += fmt.Sprintf("'%s',", s[field.FieldName])
-			}
+			columnNames = columnNames[:len(columnNames)-1]
+			columnValues = columnValues[:len(columnValues)-1]
+			InsertColumnNamesValues = strings.TrimRight(InsertColumnNamesValues, ", ")
+			buildQuery += columnValues + ")) as source (" + columnNames + ") on target.Id = '" + rowId + "' when matched then update set " + InsertColumnNamesValues + " when not matched then insert (" + postLayer.PostRepo.postTableDef.IdColumn + "," + columnNames + ") values ('" + rowId + "', " + columnValues + ");"
 
-			columnNames += fmt.Sprintf("%s,", field.FieldName)
-			InsertColumnNamesValues += fmt.Sprintf("%s = source.%s, ", field.FieldName, field.FieldName)
-
+		} else {
+			buildQuery += queryDel + "'" + rowId + "';"
 		}
-		columnNames = columnNames[:len(columnNames)-1]
-		columnValues = columnValues[:len(columnValues)-1]
-		InsertColumnNamesValues = strings.TrimRight(InsertColumnNamesValues, ", ")
-		buildQuery += columnValues + ")) as source (" + columnNames + ") on target.Id = '" + rowId + "' when matched then update set " + InsertColumnNamesValues + " when not matched then insert (" + postLayer.PostRepo.postTableDef.IdColumn + "," + columnNames + ") values ('" + rowId + "', " + columnValues + ");"
-
 	}
-
 	_, err := postLayer.PostRepo.DB.Exec(buildQuery)
 
 	if err != nil {
