@@ -46,6 +46,7 @@ type ColumnMapping struct {
 type PostMapping struct {
 	DatasetName   string          `json:"datasetName"`
 	TableName     string          `json:"tableName"`
+	IdColumn      string          `json:idColumn`
 	Query         string          `json:"query"`
 	Config        *TableConfig    `json:"config"`
 	FieldMappings []*FieldMapping `json:"fieldMappings"`

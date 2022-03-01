@@ -67,7 +67,6 @@ func (postLayer *PostLayer) connect() (*sql.DB, error) {
 func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity) error {
 
 	postLayer.PostRepo.postTableDef = postLayer.GetTableDefinition(datasetName)
-
 	if postLayer.PostRepo.postTableDef == nil {
 		return errors.New(fmt.Sprintf("No configuration found for dataset: %s", datasetName))
 	}
@@ -88,7 +87,7 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 	}
 	postLayer.logger.Debug(query)
 
-	queryDel := fmt.Sprintf(`DELETE FROM %s WHERE id = $1;`, strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
+	queryDel := fmt.Sprintf(`DELETE FROM %s WHERE id = 1;`, strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
 	postLayer.logger.Debug(queryDel)
 
 	fields := postLayer.PostRepo.postTableDef.FieldMappings
@@ -112,22 +111,47 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 			return fields[i].SortOrder < fields[j].SortOrder
 		})
 	}
-
-	valueArgs := make([]interface{}, 0, len(postLayer.PostRepo.postTableDef.FieldMappings))
-
+	buildQuery := ""
 	for _, post := range entities {
+		if !strings.ContainsAny(post.ID, ":") {
+			continue
+		}
+
+		buildQuery += fmt.Sprintf("MERGE %s WITH(HOLDLOCK) as target using (values(", strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
 		s := post.StripProps()
 		args := make([]interface{}, len(fields)+1)
 		args[0] = strings.SplitAfter(post.ID, ":")[1]
+		rowId := strings.SplitAfter(post.ID, ":")[1]
+		columnNames := ""
+		columnValues := ""
+		InsertColumnNamesValues := ""
 		for i, field := range fields {
+
 			args[i+1] = s[field.FieldName]
+			if s[field.FieldName] == nil {
+				continue
+			}
+			switch s[field.FieldName].(type) {
+			case float64:
+				columnValues += fmt.Sprintf("%f,", s[field.FieldName])
+			case int:
+				columnValues += fmt.Sprintf("%s,", s[field.FieldName])
+			default:
+				columnValues += fmt.Sprintf("'%s',", s[field.FieldName])
+			}
+
+			columnNames += fmt.Sprintf("%s,", field.FieldName)
+			InsertColumnNamesValues += fmt.Sprintf("%s = source.%s, ", field.FieldName, field.FieldName)
+
 		}
-		for _, arg := range args {
-			valueArgs = append(valueArgs, arg)
-		}
+		columnNames = columnNames[:len(columnNames)-1]
+		columnValues = columnValues[:len(columnValues)-1]
+		InsertColumnNamesValues = strings.TrimRight(InsertColumnNamesValues, ", ")
+		buildQuery += columnValues + ")) as source (" + columnNames + ") on target.Id = '" + rowId + "' when matched then update set " + InsertColumnNamesValues + " when not matched then insert (" + postLayer.PostRepo.postTableDef.IdColumn + "," + columnNames + ") values ('" + rowId + "', " + columnValues + ");"
+
 	}
 
-	_, err := postLayer.PostRepo.DB.Exec(query, valueArgs...)
+	_, err := postLayer.PostRepo.DB.Exec(buildQuery)
 
 	if err != nil {
 		err2 := postLayer.PostRepo.DB.Close()
@@ -155,33 +179,7 @@ func (postLayer *PostLayer) GetTableDefinition(datasetName string) *conf.PostMap
 	}
 	return nil
 }
-func (postLayer *PostLayer) BulkInsert(entities []*Entity) error {
 
-	fields := postLayer.PostRepo.postTableDef.FieldMappings
-	for _, entity := range entities {
-		s := entity.StripProps()
-		args := make([]interface{}, len(fields)+1)
-		args[0] = strings.SplitAfter(entity.ID, ":")[1]
-		for i, field := range fields {
-			args[i+1] = s[field.FieldName]
-		}
-	}
-
-	valueStrings := make([]string, 0, len(entities))
-	valueArgs := make([]interface{}, 0, len(entities)*3)
-
-	for _, post := range entities {
-		valueStrings = append(valueStrings, "(?, ?, ?)")
-		valueArgs = append(valueArgs, post.ID)
-		valueArgs = append(valueArgs, post.StripProps())
-		valueArgs = append(valueArgs, post.StripProps())
-	}
-	stmt := fmt.Sprintf("INSERT INTO my_sample_table (ID, name, test) VALUES %s",
-		strings.Join(valueStrings, ","))
-	_, err := postLayer.PostRepo.DB.Exec(stmt, valueArgs...)
-
-	return err
-}
 func (postLayer *PostLayer) ensureConnection() error {
 	postLayer.logger.Debug("Ensuring connection")
 	if postLayer.cmgr.State.Digest != postLayer.PostRepo.digest {
