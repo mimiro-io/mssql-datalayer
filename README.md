@@ -137,6 +137,38 @@ It is strongly recommended to leave the Password and User fields empty.
     "user": "<user>",
     "password": "<password>",
     "baseNameSpace": "http://data.test.io/le-data/",
+    "postMappings": [
+        {
+            "config": {
+                "database": "MYDB1",
+                "password": {
+                    "key": "password",
+                    "type": "env"
+                },
+                "user": {
+                    "key": "username",
+                    "type": "env"
+                }
+            },
+            "datasetName": "postCustomers",
+            "fieldMappings": [
+                {
+                    "fieldName": "Id",
+                    "order": 1
+                },
+                {
+                    "fieldName": "Name",
+                    "order": 2
+                },
+                {
+                    "fieldName": "secretData",
+                    "order": 3
+                }
+            ],
+            "query": "mssql",
+            "tableName": "Customers",
+            "idColumn": "Id"
+        }],
     "tableMappings": [
         {
             "tableName": "Customers",
@@ -198,7 +230,7 @@ It is strongly recommended to leave the Password and User fields empty.
 }
 ```
 
-Above is a complete example of a config with 2 tables from 2 different databases. It show all the available configuration options, and how to use them.
+Above is a complete example of a config with 2 tables from 2 different databases. It show all the available configuration options, and how to use them. This includes reading both and writing to the Customers-table
 
 ### Server config
 
@@ -213,6 +245,7 @@ Above is a complete example of a config with 2 tables from 2 different databases
     "password": "<password>",
     "baseUri": "http://data.test.io/le-data/",
     "baseNameSpace": "http://data.test.io/le-data/",
+    "postMappings": [],
     "tableMappings": []
 }
 ```
@@ -239,7 +272,64 @@ The server config is used to set up the connection to the database server.
 
 `baseNameSpace` is used together with the TableName in tableMapping to create the namespace.
 
+`postMappings` is a list of datasets that are mapped to tables.
+
 `tableMappings` is a list of tables that are mapped to datasets.
+
+### PostMapping config
+
+PostMapping writes single datasets from the datahub to a table. This includes INSERT, UPDATE (via MERGE) and DELETE.
+
+```json
+[
+    {
+        "datasetName":"postCustomers",
+        "tableName": "Customers",
+        "query": "",
+        "idColumn": "Primary_key_in_Table",
+        "fieldMappings": []
+    }
+]
+```
+
+`datasetName` name of the dataset in the datahub
+
+`tableName` name of the table in the database
+
+`query` Should be removed? Is overwritten by statement made in the layer
+
+`idColumn` specifies which column contains the primary key for UPSERT check
+
+`fieldMappings` list of columns, in order, that will be written to the table
+
+### FieldMapping config
+
+The FieldMapping adds order to the data that will be written to the table. If not set then we cannot guarantee the quality of data. For each property to match the correct column, this should be set.
+
+```json
+{
+    "fieldMappings": [
+                {
+                    "fieldName": "Id",
+                    "order": 1
+                },
+                {
+                    "fieldName": "Name",
+                    "order": 2
+                },
+                {
+                    "fieldName": "secretData",
+                    "order": 3
+                }
+            ]
+}
+```
+
+`fieldName` is the name of the property in the dataset
+
+`order` is in what order it should be written in to the table
+
+We use could use this to specify if we want to write the property to the database or not.
 
 ### TableMapping config
 

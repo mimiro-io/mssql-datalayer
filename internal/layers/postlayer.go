@@ -117,8 +117,10 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 			continue
 		}
 		rowId := strings.SplitAfter(post.ID, ":")[1]
-		if !post.IsDeleted { //If is deleted True --> Do not store
-
+		if !post.IsDeleted { //If is deleted True --> Delete from table
+			//test without holdlock
+			//buildQuery += fmt.Sprintf("MERGE %s as target using (values(", strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
+			//using holdlock to make sure nothing is changed during upsert
 			buildQuery += fmt.Sprintf("MERGE %s WITH(HOLDLOCK) as target using (values(", strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
 			s := post.StripProps()
 			args := make([]interface{}, len(fields)+1)
@@ -146,9 +148,11 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 				InsertColumnNamesValues += fmt.Sprintf("%s = source.%s, ", field.FieldName, field.FieldName)
 
 			}
+			//remove trailing comma, remnant from looping through values.
 			columnNames = columnNames[:len(columnNames)-1]
 			columnValues = columnValues[:len(columnValues)-1]
 			InsertColumnNamesValues = strings.TrimRight(InsertColumnNamesValues, ", ")
+			// build full upsert query using merge
 			buildQuery += columnValues + ")) as source (" + columnNames + ") on target.Id = '" + rowId + "' when matched then update set " + InsertColumnNamesValues + " when not matched then insert (" + postLayer.PostRepo.postTableDef.IdColumn + "," + columnNames + ") values ('" + rowId + "', " + columnValues + ");"
 
 		} else {
