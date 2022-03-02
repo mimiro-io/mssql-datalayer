@@ -278,7 +278,9 @@ The server config is used to set up the connection to the database server.
 
 ### PostMapping config
 
-PostMapping writes single datasets from the datahub to a table. This includes INSERT, UPDATE (via MERGE) and DELETE.
+PostMapping writes single datasets from the datahub to a table. This includes INSERT, UPDATE (via MERGE) and DELETE. 
+
+NB! Posting to a table requires you to make use of the 'latest' feature in the datahub. This makes sure that we only have one occurance of any given entity in any give batch. This is important to not have issues where an entity could be created and deleted in the same batch, or changed and the deleted etc.
 
 ```json
 [
