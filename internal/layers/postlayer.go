@@ -88,7 +88,6 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 	postLayer.logger.Debug(query)
 
 	queryDel := fmt.Sprintf(`DELETE FROM %s WHERE id =`, strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
-	postLayer.logger.Debug(queryDel)
 
 	fields := postLayer.PostRepo.postTableDef.FieldMappings
 
@@ -118,9 +117,7 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 		}
 		rowId := strings.SplitAfter(post.ID, ":")[1]
 		if !post.IsDeleted { //If is deleted True --> Delete from table
-			//test without holdlock
-			//buildQuery += fmt.Sprintf("MERGE %s as target using (values(", strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
-			//using holdlock to make sure nothing is changed during upsert
+			//using holdlock to make sure nothing is changed during upsert the need for this can be discussed. Performance?
 			buildQuery += fmt.Sprintf("MERGE %s WITH(HOLDLOCK) as target using (values(", strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
 			s := post.StripProps()
 			args := make([]interface{}, len(fields)+1)
@@ -170,10 +167,6 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 		return err
 	}
 
-	err = postLayer.PostRepo.DB.Close()
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
