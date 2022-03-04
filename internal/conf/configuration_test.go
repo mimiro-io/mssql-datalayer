@@ -18,6 +18,27 @@ const config = `
     "user": "user1",
     "password": "password1",
     "baseNameSpace": "https://data.test.io/mssql-server",
+	"postMappings": [
+	  {
+        "tableName":"Customers",
+		"idColumn": "Id",
+		"fieldMappings": [
+                {
+                    "fieldName": "Id",
+                    "order": 1
+                },
+                {
+                    "fieldName": "Name",
+                    "order": 2
+                },
+                {
+                    "fieldName": "Secret_data",
+                    "order": 3
+                }
+            ],
+		"datasetName":"post.Customers",
+		"query": "mssql"
+	  }],
     "tableMappings": [
       {
         "tableName": "Customers",
