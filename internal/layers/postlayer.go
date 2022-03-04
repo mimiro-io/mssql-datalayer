@@ -122,7 +122,6 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 			s := post.StripProps()
 			args := make([]interface{}, len(fields)+1)
 			args[0] = strings.SplitAfter(post.ID, ":")[1]
-			rowId = rowId
 			columnNames := ""
 			columnValues := ""
 			InsertColumnNamesValues := ""
