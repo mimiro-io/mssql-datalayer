@@ -18,6 +18,27 @@ const config = `
     "user": "user1",
     "password": "password1",
     "baseNameSpace": "https://data.test.io/mssql-server",
+	"postMappings": [
+	  {
+        "tableName":"Customers",
+		"idColumn": "Id",
+		"fieldMappings": [
+                {
+                    "fieldName": "Id",
+                    "order": 1
+                },
+                {
+                    "fieldName": "Name",
+                    "order": 2
+                },
+                {
+                    "fieldName": "Secret_data",
+                    "order": 3
+                }
+            ],
+		"datasetName":"post.Customers",
+		"query": "mssql"
+	  }],
     "tableMappings": [
       {
         "tableName": "Customers",
@@ -100,6 +121,21 @@ func TestParseConfig(t *testing.T) {
 		g.It("should return the table schema", func() {
 			table := datalayer.TableMappings[0]
 			g.Assert(datalayer.GetSchema(table)).Equal("dbo")
+		})
+		g.It("should get a datasetName and a tableName", func() {
+			dataset := datalayer.PostMappings[0]
+			g.Assert(dataset.TableName).Equal("Customers")
+			g.Assert(dataset.DatasetName).Equal("post.Customers")
+		})
+		g.It("should have a query", func() {
+			dataset := datalayer.PostMappings[0]
+			g.Assert(dataset.Query).Equal("mssql")
+			g.Assert(dataset.Query).IsNotNil()
+		})
+		g.It("should should specify an Id column", func() {
+			dataset := datalayer.PostMappings[0]
+			g.Assert(dataset.IdColumn).Equal("Id")
+			g.Assert(dataset.IdColumn).IsNotNil()
 		})
 
 		g.After(func() {

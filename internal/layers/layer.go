@@ -16,8 +16,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/mimiro-io/mssqldatalayer/internal/conf"
 	"go.uber.org/zap"
-
-	_ "github.com/denisenkom/go-mssqldb"
 )
 
 type Layer struct {
