@@ -161,7 +161,7 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 
 			buildQuery += columnValues + ")) as source (" + columnNames + ") on target." + postLayer.PostRepo.postTableDef.IdColumn + "= '" + rowId + "' when matched then update set " + InsertColumnNamesValues + " when not matched then insert (" + columnNames + ") values (" + columnValues + ");"
 			//debug logger
-			postLayer.logger.Debug("1")
+			//postLayer.logger.Debug("1")
 		} else {
 			buildQuery += queryDel + "'" + rowId + "';"
 		}
