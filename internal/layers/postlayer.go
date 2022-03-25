@@ -154,20 +154,16 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 			}
 			//remove trailing comma, remnant from looping through values.
 			columnNames = strings.TrimRight(columnNames, ", ")
-			//columnValues = columnValues[:len(columnValues)-1]
 			columnValues = strings.TrimRight(columnValues, ", ")
 			InsertColumnNamesValues = strings.TrimRight(InsertColumnNamesValues, ", ")
 			// build full upsert query using merge
 
 			buildQuery += columnValues + ")) as source (" + columnNames + ") on target." + postLayer.PostRepo.postTableDef.IdColumn + "= '" + rowId + "' when matched then update set " + InsertColumnNamesValues + " when not matched then insert (" + columnNames + ") values (" + columnValues + ");"
-			//debug logger
-			//postLayer.logger.Debug("1")
+
 		} else {
 			buildQuery += queryDel + "'" + rowId + "';"
 		}
 	}
-	//debug logger
-	//postLayer.logger.Debug("sending...")
 	_, err := postLayer.PostRepo.DB.Exec(buildQuery)
 
 	if err != nil {
