@@ -522,4 +522,6 @@ configuration of the environment in addition to the standard ones. All variables
 declared in the .env file (but left empty) are available for reading from the ENV
 in Docker. This will most likelly be changed in the future, and you should use ENV variables instead of a env based profile.
 
+## Known issues
 
+The driver does not handle the datetime format `2022-01-01T01:01:01 +01:00` it needs to get the date like this `2022-01-01T00:01:01Z` or `2022-01-01T00:01:01.555` 
