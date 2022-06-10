@@ -48,7 +48,12 @@ func NewQuery(request DatasetRequest, tableDef *conf.TableMapping, datalayer *co
 
 func (q FullQuery) BuildQuery() string {
 	schema := q.Datalayer.GetSchema(q.TableDef)
-	tableName := fmt.Sprintf("[%s].[%s]", schema, q.TableDef.TableName)
+	//tableName := fmt.Sprintf("[%s].[%s]", schema, q.TableDef.TableName)
+	tableName := fmt.Sprintf("%s", q.TableDef.TableName)
+	if schema != "" {
+		tableName = fmt.Sprintf("[%s].[%s]", schema, q.TableDef.TableName)
+	}
+
 	limit := ""
 	if q.Request.Limit > 0 {
 		limit = fmt.Sprintf(" TOP %d ", q.Request.Limit)
@@ -74,7 +79,7 @@ func (q CustomSinceQuery) BuildQuery() string {
 	if err == nil && string(data) != "" {
 		dt, _ := time.Parse(time.RFC3339, string(data))
 		date = fmt.Sprintf("DATETIMEFROMPARTS( %d, %d, %d, %d, %d, %d, %d)",
-			dt.Year(), dt.Month(), dt.Day(), dt.Hour(), dt.Minute(), dt.Second(), dt.Nanosecond() / 1000000)
+			dt.Year(), dt.Month(), dt.Day(), dt.Hour(), dt.Minute(), dt.Second(), dt.Nanosecond()/1000000)
 	}
 
 	replaceQuery := strings.Replace(q.TableDef.CustomQuery, "{{ since }}", date, 1)

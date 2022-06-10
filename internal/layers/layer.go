@@ -313,8 +313,8 @@ func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.C
 				ptrToString := raw.(*sql.RawBytes)
 				if (*ptrToString) != nil {
 					uid, _ := uuid.FromBytes(*ptrToString)
-					val = uid.String()
-					entity.Properties[colName] = val
+					strVal = uid.String()
+					entity.Properties[colName] = strVal
 				}
 			case "DATETIME", "DATE", "DATETIME2":
 				ptrToNullDatetime := raw.(*sql.NullTime)
