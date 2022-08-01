@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
-	"github.com/DataDog/datadog-go/statsd"
+	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/mimiro-io/mssqldatalayer/internal/db"
 	"go.uber.org/fx"
 	"reflect"
