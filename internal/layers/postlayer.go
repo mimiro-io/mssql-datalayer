@@ -141,7 +141,7 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 						createBit := fmt.Sprintf("%t", s[field.FieldName])
 						columnValues += strings.Replace(createBit, "true", "1", 1)
 					} else {
-						columnValues += fmt.Sprintf("%s", 0)
+						columnValues += "0"
 					}
 
 				default:
