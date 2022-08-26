@@ -1,0 +1,27 @@
+[
+    {
+        "id": "@context",
+        "types": [
+            "strings",
+            "strings"
+        ]
+    },
+    {
+    	"deleted":false,
+        "id": "ns0:1",
+        "props": {
+            "ns0:foo": "f",
+            "ns0:bar": "g"
+        },
+        "refs": {}
+    },
+    {
+    	"deleted":false,
+        "id": "ns0:2",
+        "props": {
+            "ns0:foo": "h",
+            "ns0:bar": "i"
+        },
+        "refs": {}
+    }
+]

@@ -110,7 +110,28 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 			return fields[i].SortOrder < fields[j].SortOrder
 		})
 	}
+
 	buildQuery := ""
+	if strings.ToLower(query) == "upsert" {
+		buildQuery = postLayer.buildUpsertQuery(entities, buildQuery, fields, queryDel)
+		_, err := postLayer.PostRepo.DB.Exec(buildQuery)
+
+		if err != nil {
+			err2 := postLayer.PostRepo.DB.Close()
+			if err2 != nil {
+				postLayer.logger.Error(err)
+				return err2
+			}
+			return err
+		}
+	} else {
+		postLayer.execInsertQuery(entities, query, fields)
+	}
+
+	return nil
+}
+
+func (postLayer *PostLayer) buildUpsertQuery(entities []*Entity, buildQuery string, fields []*conf.FieldMapping, queryDel string) string {
 	for _, post := range entities {
 		if !strings.ContainsAny(post.ID, ":") {
 			continue
@@ -164,18 +185,7 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 			buildQuery += queryDel + "'" + rowId + "';"
 		}
 	}
-	_, err := postLayer.PostRepo.DB.Exec(buildQuery)
-
-	if err != nil {
-		err2 := postLayer.PostRepo.DB.Close()
-		if err2 != nil {
-			postLayer.logger.Error(err)
-			return err2
-		}
-		return err
-	}
-
-	return nil
+	return buildQuery
 }
 
 func (postLayer *PostLayer) GetTableDefinition(datasetName string) *conf.PostMapping {
@@ -204,4 +214,44 @@ func (postLayer *PostLayer) ensureConnection() error {
 		postLayer.PostRepo.digest = postLayer.cmgr.State.Digest
 	}
 	return nil
+}
+
+func (postLayer *PostLayer) execInsertQuery(entities []*Entity, query string, fields []*conf.FieldMapping) {
+	for _, post := range entities {
+		if !strings.ContainsAny(post.ID, ":") {
+			continue
+		}
+		if !post.IsDeleted { //If is deleted True --> Delete from table
+			s := post.StripProps()
+			args := make([]interface{}, len(fields))
+			columnValues := make([]any, 0)
+			for i, field := range fields {
+
+				args[i] = s[field.FieldName]
+				if s[field.FieldName] == nil {
+					continue
+				}
+				switch s[field.FieldName].(type) {
+				case float64:
+					columnValues = append(columnValues, fmt.Sprintf("%f,", s[field.FieldName]))
+				case int:
+					columnValues = append(columnValues, fmt.Sprintf("%s,", s[field.FieldName]))
+				case bool:
+					if s[field.FieldName] == true {
+						createBit := fmt.Sprintf("%t", s[field.FieldName])
+						columnValues = append(columnValues, strings.Replace(createBit, "true", "1", 1))
+					} else {
+						columnValues = append(columnValues, "0")
+					}
+
+				default:
+					columnValues = append(columnValues, fmt.Sprintf("'%s',", s[field.FieldName]))
+				}
+			}
+			_, err := postLayer.PostRepo.DB.Exec(query, columnValues...)
+			if err != nil {
+				postLayer.logger.Error(err)
+			}
+		}
+	}
 }
