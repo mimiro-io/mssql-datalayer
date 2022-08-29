@@ -298,9 +298,9 @@ NB! Posting to a table requires you to make use of the 'latest' feature in the d
 
 `tableName` name of the table in the database
 
-`query` Should be removed? Is overwritten by statement made in the layer
+`query` Can either be a query or "upsert" which will then create a query based off of the idColumn and check for existing rows in the table to update before inserting.
 
-`idColumn` specifies which column contains the primary key for UPSERT check
+`idColumn` specifies which column contains the primary key for the table
 
 `fieldMappings` list of columns, in order, that will be written to the table
 
