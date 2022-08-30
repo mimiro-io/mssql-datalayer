@@ -233,9 +233,9 @@ func (postLayer *PostLayer) execInsertQuery(entities []*Entity, query string, fi
 				}
 				switch s[field.FieldName].(type) {
 				case float64:
-					columnValues = append(columnValues, fmt.Sprintf("%f,", s[field.FieldName]))
+					columnValues = append(columnValues, fmt.Sprintf("%f", s[field.FieldName]))
 				case int:
-					columnValues = append(columnValues, fmt.Sprintf("%s,", s[field.FieldName]))
+					columnValues = append(columnValues, fmt.Sprintf("%s", s[field.FieldName]))
 				case bool:
 					if s[field.FieldName] == true {
 						createBit := fmt.Sprintf("%t", s[field.FieldName])
@@ -245,7 +245,7 @@ func (postLayer *PostLayer) execInsertQuery(entities []*Entity, query string, fi
 					}
 
 				default:
-					columnValues = append(columnValues, fmt.Sprintf("'%s',", s[field.FieldName]))
+					columnValues = append(columnValues, fmt.Sprintf("%s", s[field.FieldName]))
 				}
 			}
 			_, err := postLayer.PostRepo.DB.Exec(query, columnValues...)
