@@ -49,7 +49,6 @@ func NewPostLayer(lc fx.Lifecycle, cmgr *conf.ConfigurationManager, logger *zap.
 func (postLayer *PostLayer) connect() (*sql.DB, error) {
 
 	u := postLayer.cmgr.Datalayer.GetPostUrl(postLayer.PostRepo.postTableDef)
-	postLayer.logger.Debug(u.String())
 	db, err := sql.Open("sqlserver", u.String())
 
 	if err != nil {
@@ -110,113 +109,11 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 			return fields[i].SortOrder < fields[j].SortOrder
 		})
 	}
-
-	buildQuery := ""
-	if strings.ToLower(query) == "upsert" {
-		buildQuery = postLayer.buildUpsertQuery(entities, buildQuery, fields, queryDel)
-		_, err := postLayer.PostRepo.DB.Exec(buildQuery)
-
-		if err != nil {
-			err2 := postLayer.PostRepo.DB.Close()
-			if err2 != nil {
-				postLayer.logger.Error(err)
-				return err2
-			}
-			return err
-		}
-	} else {
-		postLayer.execInsertQuery(entities, query, fields)
-	}
+	postLayer.execQuery(entities, query, fields, queryDel)
 
 	return nil
 }
-
-func (postLayer *PostLayer) buildUpsertQuery(entities []*Entity, buildQuery string, fields []*conf.FieldMapping, queryDel string) string {
-	for _, post := range entities {
-		if !strings.ContainsAny(post.ID, ":") {
-			continue
-		}
-		rowId := strings.SplitAfter(post.ID, ":")[1]
-		if !post.IsDeleted { //If is deleted True --> Delete from table
-			//using holdlock to make sure nothing is changed during upsert the need for this can be discussed. Performance?
-			buildQuery += fmt.Sprintf("MERGE %s WITH(HOLDLOCK) as target using (values(", strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
-			s := post.StripProps()
-			args := make([]interface{}, len(fields)+1)
-			args[0] = strings.SplitAfter(post.ID, ":")[1]
-			columnNames := ""
-			columnValues := ""
-			InsertColumnNamesValues := ""
-			for i, field := range fields {
-
-				args[i+1] = s[field.FieldName]
-				if s[field.FieldName] == nil {
-					continue
-				}
-				switch s[field.FieldName].(type) {
-				case float64:
-					columnValues += fmt.Sprintf("%f,", s[field.FieldName])
-				case int:
-					columnValues += fmt.Sprintf("%s,", s[field.FieldName])
-				case bool:
-					if s[field.FieldName] == true {
-						createBit := fmt.Sprintf("%t", s[field.FieldName])
-						columnValues += strings.Replace(createBit, "true", "1", 1)
-					} else {
-						columnValues += "0"
-					}
-
-				default:
-					columnValues += fmt.Sprintf("'%s',", s[field.FieldName])
-				}
-
-				columnNames += fmt.Sprintf("%s,", field.FieldName)
-				InsertColumnNamesValues += fmt.Sprintf("%s = source.%s, ", field.FieldName, field.FieldName)
-
-			}
-			//remove trailing comma, remnant from looping through values.
-			columnNames = strings.TrimRight(columnNames, ", ")
-			columnValues = strings.TrimRight(columnValues, ", ")
-			InsertColumnNamesValues = strings.TrimRight(InsertColumnNamesValues, ", ")
-			// build full upsert query using merge
-
-			buildQuery += columnValues + ")) as source (" + columnNames + ") on target." + postLayer.PostRepo.postTableDef.IdColumn + "= '" + rowId + "' when matched then update set " + InsertColumnNamesValues + " when not matched then insert (" + columnNames + ") values (" + columnValues + ");"
-
-		} else {
-			buildQuery += queryDel + "'" + rowId + "';"
-		}
-	}
-	return buildQuery
-}
-
-func (postLayer *PostLayer) GetTableDefinition(datasetName string) *conf.PostMapping {
-	for _, table := range postLayer.cmgr.Datalayer.PostMappings {
-		if table.DatasetName == datasetName {
-			return table
-		} else if table.TableName == datasetName { // fallback
-			return table
-		}
-	}
-	return nil
-}
-
-func (postLayer *PostLayer) ensureConnection() error {
-	postLayer.logger.Debug("Ensuring connection")
-	if postLayer.cmgr.State.Digest != postLayer.PostRepo.digest {
-		postLayer.logger.Debug("Configuration has changed need to reset connection")
-		if postLayer.PostRepo.DB != nil {
-			postLayer.PostRepo.DB.Close() // don't really care about the error, as long as it is closed
-		}
-		db, err := postLayer.connect() // errors are already logged
-		if err != nil {
-			return err
-		}
-		postLayer.PostRepo.DB = db
-		postLayer.PostRepo.digest = postLayer.cmgr.State.Digest
-	}
-	return nil
-}
-
-func (postLayer *PostLayer) execInsertQuery(entities []*Entity, query string, fields []*conf.FieldMapping) {
+func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields []*conf.FieldMapping, queryDel string) {
 	for _, post := range entities {
 		if !strings.ContainsAny(post.ID, ":") {
 			continue
@@ -252,6 +149,39 @@ func (postLayer *PostLayer) execInsertQuery(entities []*Entity, query string, fi
 			if err != nil {
 				postLayer.logger.Error(err)
 			}
+		} else if postLayer.PostRepo.postTableDef.IdColumn != "" {
+			_, err := postLayer.PostRepo.DB.Exec(queryDel)
+			if err != nil {
+				postLayer.logger.Error(err)
+			}
 		}
 	}
+}
+
+func (postLayer *PostLayer) GetTableDefinition(datasetName string) *conf.PostMapping {
+	for _, table := range postLayer.cmgr.Datalayer.PostMappings {
+		if table.DatasetName == datasetName {
+			return table
+		} else if table.TableName == datasetName { // fallback
+			return table
+		}
+	}
+	return nil
+}
+
+func (postLayer *PostLayer) ensureConnection() error {
+	postLayer.logger.Debug("Ensuring connection")
+	if postLayer.cmgr.State.Digest != postLayer.PostRepo.digest {
+		postLayer.logger.Debug("Configuration has changed need to reset connection")
+		if postLayer.PostRepo.DB != nil {
+			postLayer.PostRepo.DB.Close() // don't really care about the error, as long as it is closed
+		}
+		db, err := postLayer.connect() // errors are already logged
+		if err != nil {
+			return err
+		}
+		postLayer.PostRepo.DB = db
+		postLayer.PostRepo.digest = postLayer.cmgr.State.Digest
+	}
+	return nil
 }
