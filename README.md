@@ -298,9 +298,9 @@ NB! Posting to a table requires you to make use of the 'latest' feature in the d
 
 `tableName` name of the table in the database
 
-`query` Can either be a query or "upsert" which will then create a query based off of the idColumn and check for existing rows in the table to update before inserting.
+`query` Can either be a query to insert to a column with or without the PK in the dataset. If the PK is auto-incrementing we cannot do deletes on that table.
 
-`idColumn` specifies which column contains the primary key for the table
+`idColumn` specifies which property that contains the primary key for the table, if the table has an auto-incrementing PK, this field should be left empty.
 
 `fieldMappings` list of columns, in order, that will be written to the table
 
@@ -437,7 +437,7 @@ Again, remember that if it is not configured, the default is for the field to be
 
 `referenceTemplate` is used to create the URI to the external Entity.
 
-`ignoreColumn` sometimes you don't want to include the column as it is sensisite, or contains rubbish, and this ignores it.
+`ignoreColumn` sometimes you don't want to include the column as it is sensitive, or contains rubbish, and this ignores it.
 
 
 ## Running
@@ -525,3 +525,5 @@ in Docker. This will most likelly be changed in the future, and you should use E
 ## Known issues
 
 The driver does not handle the datetime format `2022-01-01T01:01:01 +01:00` it needs to get the date like this `2022-01-01T00:01:01Z` or `2022-01-01T00:01:01.555` 
+
+The integer datatype is not handled when writing to a table, this is because all numbers are treated as float64 by the datahub.
