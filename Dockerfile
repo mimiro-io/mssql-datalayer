@@ -1,4 +1,4 @@
-FROM golang:1.18.4 as build_base
+FROM golang:1.19.1 as build_base
 
 # Set the Current Working Directory inside the container
 WORKDIR /app
