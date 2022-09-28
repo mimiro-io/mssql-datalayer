@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	_ "github.com/denisenkom/go-mssqldb"
+	"github.com/mimiro-io/internal-go-util/pkg/uda"
 	"github.com/mimiro-io/mssqldatalayer/internal/conf"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -19,10 +20,11 @@ type PostLayer struct {
 	PostRepo *PostRepository //exported because it needs to deferred from main??
 }
 type PostRepository struct {
-	DB           *sql.DB
-	ctx          context.Context
-	postTableDef *conf.PostMapping
-	digest       [16]byte
+	DB            *sql.DB
+	ctx           context.Context
+	postTableDef  *conf.PostMapping
+	digest        [16]byte
+	EntityContext *uda.Context
 }
 
 func NewPostLayer(lc fx.Lifecycle, cmgr *conf.ConfigurationManager, logger *zap.SugaredLogger) *PostLayer {
@@ -63,12 +65,14 @@ func (postLayer *PostLayer) connect() (*sql.DB, error) {
 	return db, nil
 }
 
-func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity) error {
+func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity, entityContext *uda.Context) error {
 
 	postLayer.PostRepo.postTableDef = postLayer.GetTableDefinition(datasetName)
 	if postLayer.PostRepo.postTableDef == nil {
 		return errors.New(fmt.Sprintf("No configuration found for dataset: %s", datasetName))
 	}
+
+	postLayer.PostRepo.EntityContext = entityContext
 
 	if postLayer.PostRepo.DB == nil {
 		db, err := postLayer.connect() // errors are already logged
@@ -109,11 +113,10 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity)
 			return fields[i].SortOrder < fields[j].SortOrder
 		})
 	}
-	postLayer.execQuery(entities, query, fields, queryDel)
 
-	return nil
+	return postLayer.execQuery(entities, query, fields, queryDel)
 }
-func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields []*conf.FieldMapping, queryDel string) {
+func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields []*conf.FieldMapping, queryDel string) error {
 	for _, post := range entities {
 		if !strings.ContainsAny(post.ID, ":") {
 			continue
@@ -123,31 +126,54 @@ func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields [
 			args := make([]interface{}, len(fields))
 			columnValues := make([]any, 0)
 			for i, field := range fields {
+				var value interface{}
 
-				args[i] = s[field.FieldName]
-				if s[field.FieldName] == nil {
-					continue
+				propValue := s[field.FieldName]
+				if field.ResolveNamespace && propValue != nil {
+					value = uda.ToURI(postLayer.PostRepo.EntityContext, s[field.FieldName].(string))
+				} else {
+					value = propValue
 				}
-				switch s[field.FieldName].(type) {
+
+				args[i] = value
+
+				switch value.(type) {
+				case nil:
+					if !postLayer.PostRepo.postTableDef.NullEmptyColumnValues {
+						continue // TODO:Need to fail properly when this happens
+					}
+					switch strings.Split(field.Datatype, "(")[0] {
+					case "VARCHAR":
+						columnValues = append(columnValues, sql.NullString{})
+					case "BIT":
+						columnValues = append(columnValues, sql.NullBool{})
+					case "INT":
+						columnValues = append(columnValues, sql.NullInt64{})
+					case "DATETIME2":
+						columnValues = append(columnValues, sql.NullTime{})
+					case "FLOAT":
+						columnValues = append(columnValues, sql.NullBool{})
+					}
 				case float64:
-					columnValues = append(columnValues, fmt.Sprintf("%f", s[field.FieldName]))
+					columnValues = append(columnValues, fmt.Sprintf("%f", value))
 				case int:
-					columnValues = append(columnValues, fmt.Sprintf("%s", s[field.FieldName]))
+					columnValues = append(columnValues, fmt.Sprintf("%s", value))
 				case bool:
-					if s[field.FieldName] == true {
-						createBit := fmt.Sprintf("%t", s[field.FieldName])
+					if value == true {
+						createBit := fmt.Sprintf("%t", value)
 						columnValues = append(columnValues, strings.Replace(createBit, "true", "1", 1))
 					} else {
 						columnValues = append(columnValues, "0")
 					}
 
 				default:
-					columnValues = append(columnValues, fmt.Sprintf("%s", s[field.FieldName]))
+					columnValues = append(columnValues, fmt.Sprintf("%s", value))
 				}
 			}
 			_, err := postLayer.PostRepo.DB.Exec(query, columnValues...)
 			if err != nil {
 				postLayer.logger.Error(err)
+				return err
 			}
 		} else if postLayer.PostRepo.postTableDef.IdColumn != "" {
 			_, err := postLayer.PostRepo.DB.Exec(queryDel)
@@ -156,6 +182,7 @@ func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields [
 			}
 		}
 	}
+	return nil
 }
 
 func (postLayer *PostLayer) GetTableDefinition(datasetName string) *conf.PostMapping {

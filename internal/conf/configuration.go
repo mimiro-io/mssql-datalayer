@@ -44,19 +44,22 @@ type ColumnMapping struct {
 }
 
 type PostMapping struct {
-	DatasetName   string          `json:"datasetName"`
-	TableName     string          `json:"tableName"`
-	IdColumn      string          `json:"idColumn"`
-	Query         string          `json:"query"`
-	Config        *TableConfig    `json:"config"`
-	FieldMappings []*FieldMapping `json:"fieldMappings"`
+	DatasetName           string          `json:"datasetName"`
+	TableName             string          `json:"tableName"`
+	IdColumn              string          `json:"idColumn"`
+	Query                 string          `json:"query"`
+	Config                *TableConfig    `json:"config"`
+	FieldMappings         []*FieldMapping `json:"fieldMappings"`
+	NullEmptyColumnValues bool            `json:"nullEmptyColumnValues"`
 }
 
 type FieldMapping struct {
-	FieldName  string `json:"fieldName"`
-	ToSqlField string `json:"toSqlField"`
-	SortOrder  int    `json:"order"`
-	Type       string `json:"type"`
+	FieldName        string `json:"fieldName"`
+	ToSqlField       string `json:"toSqlField"`
+	SortOrder        int    `json:"order"`
+	Type             string `json:"type"`
+	ResolveNamespace bool   `json:"resolveNamespace"`
+	Datatype         string `json:"datatype"`
 }
 
 type TableConfig struct {

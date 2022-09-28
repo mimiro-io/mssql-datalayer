@@ -154,19 +154,24 @@ It is strongly recommended to leave the Password and User fields empty.
             "fieldMappings": [
                 {
                     "fieldName": "Id",
-                    "order": 1
+                    "order": 1,
+                    "dataType": "VARCHAR(100)",
+                    "resolveNamespace": true
                 },
                 {
                     "fieldName": "Name",
-                    "order": 2
+                    "order": 2,
+                    "dataType": "VARCHAR(100)"
                 },
                 {
                     "fieldName": "secretData",
-                    "order": 3
+                    "order": 3,
+                    "dataType": "VARCHAR(100)"
                 }
             ],
             "query": "mssql",
             "tableName": "Customers",
+            "nullEmptyColumnValues": true,
             "idColumn": "Id"
         }],
     "tableMappings": [
@@ -278,7 +283,7 @@ The server config is used to set up the connection to the database server.
 
 ### PostMapping config
 
-PostMapping writes single datasets from the datahub to a table. This includes INSERT, UPDATE (via MERGE) and DELETE. 
+PostMapping writes single datasets from the datahub to a table. This includes INSERT, UPDATE (via MERGE) and DELETE.
 
 NB! Posting to a table requires you to make use of the 'latest' feature in the datahub. This makes sure that we only have one occurance of any given entity in any give batch. This is important to not have issues where an entity could be created and deleted in the same batch, or changed and the deleted etc.
 
@@ -300,6 +305,8 @@ NB! Posting to a table requires you to make use of the 'latest' feature in the d
 
 `query` Can either be a query to insert to a column with or without the PK in the dataset. If the PK is auto-incrementing we cannot do deletes on that table.
 
+`nullEmptyColumnValues` if true, the datalayer will set null values for fields not included in the payload. To determine the correct null type, the `datatype` for each column must be defined on the field config.
+
 `idColumn` specifies which property that contains the primary key for the table, if the table has an auto-incrementing PK, this field should be left empty.
 
 `fieldMappings` list of columns, in order, that will be written to the table
@@ -313,15 +320,19 @@ The FieldMapping adds order to the data that will be written to the table. If no
     "fieldMappings": [
                 {
                     "fieldName": "Id",
-                    "order": 1
+                    "order": 1,
+                    "dataType": "VARCHAR(100)",
+                    "resolveNamespace": true
                 },
                 {
                     "fieldName": "Name",
-                    "order": 2
+                    "order": 2,
+                    "dataType": "VARCHAR(100)"
                 },
                 {
                     "fieldName": "secretData",
-                    "order": 3
+                    "order": 3,
+                    "dataType": "VARCHAR(100)"
                 }
             ]
 }
@@ -330,6 +341,10 @@ The FieldMapping adds order to the data that will be written to the table. If no
 `fieldName` is the name of the property in the dataset
 
 `order` is in what order it should be written in to the table
+
+`datatype` is the type defined for the matching table column
+
+`resolveNamespace` if true, this will resolve any namespace ref prefix to a full uri
 
 We use could use this to specify if we want to write the property to the database or not.
 
@@ -524,6 +539,6 @@ in Docker. This will most likelly be changed in the future, and you should use E
 
 ## Known issues
 
-The driver does not handle the datetime format `2022-01-01T01:01:01 +01:00` it needs to get the date like this `2022-01-01T00:01:01Z` or `2022-01-01T00:01:01.555` 
+The driver does not handle the datetime format `2022-01-01T01:01:01 +01:00` it needs to get the date like this `2022-01-01T00:01:01Z` or `2022-01-01T00:01:01.555`
 
 The integer datatype is not handled when writing to a table, this is because all numbers are treated as float64 by the datahub.
