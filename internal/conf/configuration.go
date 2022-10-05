@@ -55,9 +55,7 @@ type PostMapping struct {
 
 type FieldMapping struct {
 	FieldName        string `json:"fieldName"`
-	ToSqlField       string `json:"toSqlField"`
 	SortOrder        int    `json:"order"`
-	Type             string `json:"type"`
 	ResolveNamespace bool   `json:"resolveNamespace"`
 	Datatype         string `json:"datatype"`
 }

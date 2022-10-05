@@ -137,37 +137,27 @@ func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields [
 
 				args[i] = value
 
-				switch value.(type) {
-				case nil:
+				datatype := strings.Split(field.Datatype, "(")[0]
+				if value == nil {
 					if !postLayer.PostRepo.postTableDef.NullEmptyColumnValues {
 						continue // TODO:Need to fail properly when this happens
 					}
-					switch strings.Split(field.Datatype, "(")[0] {
-					case "VARCHAR":
-						columnValues = append(columnValues, sql.NullString{})
+					columnValues = append(columnValues, getSqlNull(datatype))
+				} else {
+					switch datatype {
 					case "BIT":
-						columnValues = append(columnValues, sql.NullBool{})
-					case "INT":
-						columnValues = append(columnValues, sql.NullInt64{})
-					case "DATETIME2":
-						columnValues = append(columnValues, sql.NullTime{})
+						bit := 0
+						if value.(bool) {
+							bit = 1
+						}
+						columnValues = append(columnValues, bit)
+					case "INT", "SMALLINT", "TINYINT":
+						columnValues = append(columnValues, int64(value.(float64)))
 					case "FLOAT":
-						columnValues = append(columnValues, sql.NullBool{})
+						columnValues = append(columnValues, fmt.Sprintf("%f", value))
+					default: // all other types can be sent as string
+						columnValues = append(columnValues, fmt.Sprintf("%s", value))
 					}
-				case float64:
-					columnValues = append(columnValues, fmt.Sprintf("%f", value))
-				case int:
-					columnValues = append(columnValues, fmt.Sprintf("%s", value))
-				case bool:
-					if value == true {
-						createBit := fmt.Sprintf("%t", value)
-						columnValues = append(columnValues, strings.Replace(createBit, "true", "1", 1))
-					} else {
-						columnValues = append(columnValues, "0")
-					}
-
-				default:
-					columnValues = append(columnValues, fmt.Sprintf("%s", value))
 				}
 			}
 			_, err := postLayer.PostRepo.DB.Exec(query, columnValues...)
@@ -183,6 +173,23 @@ func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields [
 		}
 	}
 	return nil
+}
+
+func getSqlNull(datatype string) any {
+	switch datatype {
+	case "VARCHAR":
+		return sql.NullString{}
+	case "BIT":
+		return sql.NullBool{}
+	case "INT":
+		return sql.NullInt64{}
+	case "DATETIME2":
+		return sql.NullTime{}
+	case "FLOAT":
+		return sql.NullBool{}
+	default:
+		return sql.RawBytes{}
+	}
 }
 
 func (postLayer *PostLayer) GetTableDefinition(datasetName string) *conf.PostMapping {
