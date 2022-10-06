@@ -57,7 +57,7 @@ type FieldMapping struct {
 	FieldName        string `json:"fieldName"`
 	SortOrder        int    `json:"order"`
 	ResolveNamespace bool   `json:"resolveNamespace"`
-	Datatype         string `json:"datatype"`
+	DataType         string `json:"dataType"`
 }
 
 type TableConfig struct {
