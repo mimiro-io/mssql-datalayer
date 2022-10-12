@@ -10,18 +10,12 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 )
 
 type ServiceInfo struct {
 	Name     string
 	Location string
-}
-
-type DatasetName struct {
-	Name string   `json:"name"`
-	Type []string `json:"type"`
 }
 
 type datasetHandler struct {
@@ -51,14 +45,12 @@ func NewDatasetHandler(lc fx.Lifecycle, e *echo.Echo, logger *zap.SugaredLogger,
 
 // listDatasetsHandler
 func (handler *datasetHandler) listDatasetsHandler(c echo.Context) error {
-	names := make([]DatasetName, 0)
-	datasets := handler.layer.GetDatasetNames()
-	sort.Strings(datasets)
-	for _, v := range datasets {
-		names = append(names, DatasetName{Name: v, Type: []string{"GET"}})
-	}
+	datasets := handler.layer.GetDatasetEndpoints()
+	//sort.Slice(datasets, func(i, j int) bool {
+	//	return datasets[i].Name < datasets[j].Name
+	//})
 
-	return c.JSON(http.StatusOK, names)
+	return c.JSON(http.StatusOK, datasets)
 }
 
 // getEntitiesHandler

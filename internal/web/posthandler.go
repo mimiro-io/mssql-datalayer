@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/bcicen/jstream"
 	"github.com/labstack/echo/v4"
+	"github.com/mimiro-io/internal-go-util/pkg/uda"
 	"github.com/mimiro-io/mssqldatalayer/internal/layers"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -46,11 +47,14 @@ func (handler *postHandler) postHandler(c echo.Context) error {
 	read := 0
 
 	entities := make([]*layers.Entity, 0) //why 0?
+	var entityContext *uda.Context
 
 	isFirst := true
 
 	err := parseStream(c.Request().Body, func(value *jstream.MetaValue) error {
 		if isFirst {
+			ec := uda.AsContext(value)
+			entityContext = ec
 			isFirst = false
 		} else {
 			entities = append(entities, asEntity(value))
@@ -58,7 +62,7 @@ func (handler *postHandler) postHandler(c echo.Context) error {
 			if read == batchSize {
 				read = 0
 
-				err := postLayer.PostEntities(datasetName, entities)
+				err := postLayer.PostEntities(datasetName, entities, entityContext)
 				if err != nil {
 					handler.logger.Error(err)
 					return err
@@ -75,7 +79,7 @@ func (handler *postHandler) postHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, errors.New("could not parse the json payload").Error())
 	}
 	if read > 0 {
-		err := postLayer.PostEntities(datasetName, entities)
+		err := postLayer.PostEntities(datasetName, entities, entityContext)
 		if err != nil {
 			handler.logger.Error(err)
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())

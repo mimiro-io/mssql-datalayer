@@ -39,6 +39,11 @@ type DatasetRequest struct {
 	Limit       int64
 }
 
+type DatasetName struct {
+	Name string   `json:"name"`
+	Type []string `json:"type"`
+}
+
 const jsonNull = "null"
 
 func NewLayer(lc fx.Lifecycle, cmgr *conf.ConfigurationManager, env *conf.Env, statsd statsd.ClientInterface) *Layer {
@@ -70,6 +75,27 @@ func (l *Layer) GetDatasetNames() []string {
 	for _, table := range l.cmgr.Datalayer.TableMappings {
 		names = append(names, table.TableName)
 	}
+	return names
+}
+
+func (l *Layer) GetDatasetEndpoints() []DatasetName {
+	names := make([]DatasetName, 0)
+	for _, table := range l.cmgr.Datalayer.TableMappings {
+		names = append(names, DatasetName{Name: table.TableName, Type: []string{"GET"}})
+	}
+	for _, table := range l.cmgr.Datalayer.PostMappings {
+		found := false
+		for i, dataset := range names {
+			if dataset.Name == table.TableName {
+				names[i].Type = append(names[i].Type, "POST")
+				found = true
+			}
+		}
+		if !found {
+			names = append(names, DatasetName{Name: table.TableName, Type: []string{"POST"}})
+		}
+	}
+	// TODO: support listing dataset that only handle post
 	return names
 }
 

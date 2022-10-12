@@ -14,6 +14,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/juliangruber/go-intersect v1.1.0
 	github.com/labstack/echo/v4 v4.9.0
+	github.com/mimiro-io/internal-go-util v0.0.0-20220621120333-ed6ba3a9996d
 	github.com/onsi/gomega v1.20.0
 	github.com/spf13/viper v1.13.0
 	go.uber.org/fx v1.18.1
