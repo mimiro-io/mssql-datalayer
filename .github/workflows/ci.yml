@@ -12,6 +12,7 @@ jobs:
     uses: mimiro-io/.github/.github/workflows/dockerhub.yaml@main
     with:
       name: "mimiro/mssql-datalayer"
+      version_file: "internal/web/VERSION.json"
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

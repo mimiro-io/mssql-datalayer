@@ -2,13 +2,19 @@ package web
 
 import (
 	"context"
+	_ "embed"
+	"encoding/json"
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/labstack/echo/v4"
 	"github.com/mimiro-io/mssqldatalayer/internal/conf"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"net/http"
+	"runtime"
 )
+
+//go:embed VERSION.json
+var versionFile []byte
 
 type Handler struct {
 	Logger       *zap.SugaredLogger
@@ -52,13 +58,17 @@ func NewWebServer(lc fx.Lifecycle, env *conf.Env, logger *zap.SugaredLogger, sta
 func Register(e *echo.Echo, env *conf.Env, handler *Handler, mw *Middleware) {
 	// this sets up the main chain
 	env.Logger.Infof("Registering endpoints")
-	e.GET("/health", health)
+	e.GET("/health", handler.health)
 	e.GET("/", handler.serviceInfoHandler, mw.authorizer(handler.Logger, "datahub:r"))
 
 }
 
-func health(c echo.Context) error {
-	return c.String(http.StatusOK, "UP")
+func (handler *Handler) health(c echo.Context) error {
+	var version map[string]string
+	json.Unmarshal(versionFile, &version)
+	version["go_version"] = runtime.Version()
+
+	return c.JSON(http.StatusOK, version)
 }
 
 // serviceInfoHandler
