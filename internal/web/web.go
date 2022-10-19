@@ -58,12 +58,12 @@ func NewWebServer(lc fx.Lifecycle, env *conf.Env, logger *zap.SugaredLogger, sta
 func Register(e *echo.Echo, env *conf.Env, handler *Handler, mw *Middleware) {
 	// this sets up the main chain
 	env.Logger.Infof("Registering endpoints")
-	e.GET("/health", handler.health)
+	e.GET("/health", health)
 	e.GET("/", handler.serviceInfoHandler, mw.authorizer(handler.Logger, "datahub:r"))
 
 }
 
-func (handler *Handler) health(c echo.Context) error {
+func health(c echo.Context) error {
 	var version map[string]string
 	json.Unmarshal(versionFile, &version)
 	version["go_version"] = runtime.Version()
