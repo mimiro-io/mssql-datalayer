@@ -90,7 +90,7 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity,
 	}
 	postLayer.logger.Debug(query)
 
-	queryDel := fmt.Sprintf(`DELETE FROM %s WHERE id =`, strings.ToLower(postLayer.PostRepo.postTableDef.TableName))
+	queryDel := fmt.Sprintf(`DELETE FROM %s WHERE %s =`, strings.ToLower(postLayer.PostRepo.postTableDef.TableName), postLayer.PostRepo.postTableDef.IdColumn)
 
 	fields := postLayer.PostRepo.postTableDef.FieldMappings
 
