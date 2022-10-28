@@ -285,8 +285,6 @@ The server config is used to set up the connection to the database server.
 
 PostMapping writes single datasets from the datahub to a table. This includes INSERT, UPDATE (via MERGE) and DELETE.
 
-NB! Posting to a table requires you to make use of the 'latest' feature in the datahub. This makes sure that we only have one occurance of any given entity in any give batch. This is important to not have issues where an entity could be created and deleted in the same batch, or changed and the deleted etc.
-
 ```json
 [
     {
@@ -342,7 +340,7 @@ The FieldMapping adds order to the data that will be written to the table. If no
 
 `order` is in what order it should be written in to the table
 
-`datatype` is the type defined for the matching table column
+`dataType` is the type defined for the matching table column. These should correspond to one of these: https://learn.microsoft.com/en-us/sql/t-sql/data-types/data-types-transact-sql?view=sql-server-ver16
 
 `resolveNamespace` if true, this will resolve any namespace ref prefix to a full uri
 
@@ -540,5 +538,3 @@ in Docker. This will most likelly be changed in the future, and you should use E
 ## Known issues
 
 The driver does not handle the datetime format `2022-01-01T01:01:01 +01:00` it needs to get the date like this `2022-01-01T00:01:01Z` or `2022-01-01T00:01:01.555`
-
-The integer datatype is not handled when writing to a table, this is because all numbers are treated as float64 by the datahub.
