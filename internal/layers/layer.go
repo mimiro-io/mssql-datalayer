@@ -346,7 +346,28 @@ func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.C
 				ptrToNullDatetime := raw.(*sql.NullTime)
 				if (*ptrToNullDatetime).Valid {
 					val = (*ptrToNullDatetime).Time
-					entity.Properties[colName] = val
+					var location *time.Location
+					var err error
+					if tableDef.Timezone != "" {
+						location, err = time.LoadLocation(tableDef.Timezone)
+						if err != nil {
+							l.logger.Errorf("Error parsing timezone from table definition")
+							return nil
+						}
+					} else if l.cmgr.Datalayer.Timezone != "" {
+						location, err = time.LoadLocation(l.cmgr.Datalayer.Timezone)
+						if err != nil {
+							l.logger.Errorf("Error parsing timezone from db definition")
+							return nil
+						}
+					} else {
+						location, _ = time.LoadLocation("UTC")
+					}
+					val, err = time.ParseInLocation("2006-01-02T15:04:05Z", val.(time.Time).Format(time.RFC3339), location)
+					if err != nil {
+						l.logger.Errorf("Error parsing timestamp: %s", val)
+					}
+					entity.Properties[colName] = val.(time.Time).UTC()
 				}
 			case "INT", "SMALLINT", "TINYINT":
 				ptrToNullInt := raw.(*sql.NullInt64)
