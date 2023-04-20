@@ -368,7 +368,7 @@ func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.C
 					if err != nil {
 						l.logger.Errorf("Error parsing timestamp: %s", val)
 					}
-					entity.Properties[colName] = val.(time.Time).UTC()
+					entity.Properties[colName] = val.(time.Time).Format(time.RFC3339Nano)
 				}
 			case "INT", "SMALLINT", "TINYINT":
 				ptrToNullInt := raw.(*sql.NullInt64)
