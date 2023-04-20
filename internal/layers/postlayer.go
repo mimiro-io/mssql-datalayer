@@ -136,8 +136,8 @@ func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields [
 				}
 
 				args[i] = value
-
-				datatype := strings.Split(field.DataType, "(")[0]
+				// to upper to help user input be consistent.
+				datatype := strings.ToUpper(strings.Split(field.DataType, "(")[0])
 				if value == nil {
 					if !postLayer.PostRepo.postTableDef.NullEmptyColumnValues {
 						continue // TODO:Need to fail properly when this happens
