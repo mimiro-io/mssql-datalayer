@@ -42,8 +42,9 @@ func (handler *postHandler) postHandler(c echo.Context) error {
 	handler.logger.Debugf("Working on dataset %s", datasetName)
 
 	postLayer := handler.postLayer
-
-	batchSize := 1000
+	//set batch size to default batch size of data hub
+	//TODO: Get this as a configurable variable and document usage.
+	batchSize := 10000
 	read := 0
 
 	entities := make([]*layers.Entity, 0) //why 0?
