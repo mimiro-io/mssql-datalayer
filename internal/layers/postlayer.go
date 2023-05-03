@@ -11,10 +11,10 @@ import (
 	"github.com/spf13/cast"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 type PostLayer struct {
@@ -115,23 +115,31 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity,
 		})
 	}
 	if query == "upsertBulk" {
-		// create 20 paralell inserts 500 entitites each
+		g := new(errgroup.Group)
+		// create 20 parallel inserts 500 entities each
 		groupCount := 20
-		var wg sync.WaitGroup
+		//var wg sync.WaitGroup
 		for i := 0; i < groupCount; i++ {
-			wg.Add(1)
+			//wg.Add(1)
+			entslice := entities[(len(entities)/groupCount)*i : (((len(entities) / groupCount) * i) + len(entities)/groupCount)]
+			g.Go(func() error {
+				err := postLayer.upsertBulk(entslice, fields, queryDel)
+				if err != nil {
+					return err
+				}
+				return err
+			})
 
-			entslice := entities[len(entities)/groupCount*i : ((len(entities)/groupCount*i)+len(entities)/groupCount)-1]
-
-			go func(slice []*Entity) {
-				defer wg.Done()
-				postLayer.upsertBulk(slice, fields, queryDel)
-
-			}(entslice)
 		}
-		wg.Wait()
-		return nil
+		//go func() {
+		//defer wg.Done()
 
+		//}()
+		if err := g.Wait(); err != nil {
+			return err
+		}
+		return nil
+		//wg.Wait()
 	} else {
 		return postLayer.execQuery(entities, query, fields, queryDel)
 	}
