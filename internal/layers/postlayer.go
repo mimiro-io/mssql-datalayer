@@ -118,9 +118,8 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity,
 		g := new(errgroup.Group)
 		// create 20 parallel inserts 500 entities each
 		groupCount := 20
-		//var wg sync.WaitGroup
 		for i := 0; i < groupCount; i++ {
-			//wg.Add(1)
+
 			entslice := entities[(len(entities)/groupCount)*i : (((len(entities) / groupCount) * i) + len(entities)/groupCount)]
 			g.Go(func() error {
 				err := postLayer.upsertBulk(entslice, fields, queryDel)
@@ -131,15 +130,11 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity,
 			})
 
 		}
-		//go func() {
-		//defer wg.Done()
 
-		//}()
 		if err := g.Wait(); err != nil {
 			return err
 		}
 		return nil
-		//wg.Wait()
 	} else {
 		return postLayer.execQuery(entities, query, fields, queryDel)
 	}
