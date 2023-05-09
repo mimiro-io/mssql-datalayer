@@ -6,7 +6,6 @@ require (
 	github.com/DataDog/datadog-go/v5 v5.1.1
 	github.com/bamzi/jobrunner v1.0.0
 	github.com/bcicen/jstream v1.0.1
-	github.com/denisenkom/go-mssqldb v0.12.2
 	github.com/franela/goblin v0.0.0-20211003143422-0a4f594942bf
 	github.com/goburrow/cache v0.1.4
 	github.com/gojektech/heimdall/v6 v6.1.0
@@ -14,6 +13,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/juliangruber/go-intersect v1.1.0
 	github.com/labstack/echo/v4 v4.9.0
+	github.com/microsoft/go-mssqldb v0.21.0
 	github.com/mimiro-io/internal-go-util v0.0.0-20220621120333-ed6ba3a9996d
 	github.com/onsi/gomega v1.20.0
 	github.com/spf13/cast v1.5.0

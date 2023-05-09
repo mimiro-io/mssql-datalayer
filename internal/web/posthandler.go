@@ -42,11 +42,13 @@ func (handler *postHandler) postHandler(c echo.Context) error {
 	handler.logger.Debugf("Working on dataset %s", datasetName)
 
 	postLayer := handler.postLayer
-	//set batch size to default batch size of data hub
-	//TODO: Get this as a configurable variable and document usage.
-	batchSize := 10000
+	postLayer.PostRepo.PostTableDef = postLayer.GetTableDefinition(datasetName)
+	//if not set, set batch size to default batch size of data hub
+	batchSize := postLayer.PostRepo.PostTableDef.BatchSize
+	if batchSize < 0 {
+		batchSize = 10000
+	}
 	read := 0
-
 	entities := make([]*layers.Entity, 0) //why 0?
 	var entityContext *uda.Context
 

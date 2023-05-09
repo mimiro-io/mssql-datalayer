@@ -1,0 +1,27 @@
+[
+    {
+        "id": "@context",
+        "namespaces": {
+            "a": "http://data/base",
+            "b": "http://external/base"
+        }
+    },
+    {
+        "id": "a:1",
+        "props": {
+            "a:Id": "a:1",
+            "a:Column_Int": 12344556,
+            "a:Column_Tinyint": 13,
+            "a:Column_Smallint": 41,
+            "b:Column_Bit": false,
+            "b:Column_Float": 7.99,
+            "b:Column_Datetime": "2023-01-01T01:01:01+01:00",
+            "b:Column_Datetime2": "2023-01-01T01:01:01+02:00",
+            "b:Column_Varchar": "b:string"
+        }
+    },
+    {
+        "id": "@continuation",
+        "token": "AAgAAADuAAAAAABaORc="
+    }
+]

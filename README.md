@@ -172,7 +172,10 @@ It is strongly recommended to leave the Password and User fields empty.
             "query": "'upsertBulk' or user-defined sql statement",
             "tableName": "Customers",
             "nullEmptyColumnValues": true,
-            "idColumn": "Id"
+            "idColumn": "Id",
+            "batchSize": 10000,
+            "workers": 20,
+            "timeZone": "Europe/Oslo"
         }],
     "tableMappings": [
         {
@@ -311,6 +314,12 @@ NB! Posting to a table requires you to make use of the 'latestOnly' feature in t
 
 `fieldMappings` list of columns, in order, that will be written to the table
 
+`batchSize` size of batch that should be sent each time, standard in the datahub is 10000 and so is this.
+
+`workers` amount of concurrent threads running on posting to a table in a database with upsertBulk
+
+`timeZone` the receiving database time zone
+
 ### FieldMapping config
 
 The FieldMapping adds order to the data that will be written to the table. If not set then we cannot guarantee the quality of data. For each property to match the correct column, this should be set.
@@ -342,11 +351,25 @@ The FieldMapping adds order to the data that will be written to the table. If no
 
 `order` is in what order it should be written in to the table
 
-`dataType` is the type defined for the matching table column
+`dataType` is the type defined for the matching table column.
 
-`resolveNamespace` if true, this will resolve any namespace ref prefix to a full uri
+`resolveNamespace` if true, this will resolve any namespace ref prefix to a full uri.
 
 We use could use this to specify if we want to write the property to the database or not.
+
+#### Supported data types
+| Types                      |
+|----------------------------|
+| VARCHAR, NCHAR, CHAR, TEXT |
+| INT, SMALLINT, TINYINT     |
+| NUMERIC                    |
+| FLOAT                      |
+| BIT                        |
+| DATETIME, DATETIME2        |
+| DATE                       |
+| DATETIMEOFFSET             |
+| DECIMAL                    |
+
 
 ### TableMapping config
 
@@ -539,6 +562,6 @@ in Docker. This will most likelly be changed in the future, and you should use E
 
 ## Known issues
 
-The driver does not handle the datetime format `2022-01-01T01:01:01 +01:00` it needs to get the date like this `2022-01-01T00:01:01Z` or `2022-01-01T00:01:01.555`
+FIXED: The driver does not handle the datetime format `2022-01-01T01:01:01 +01:00` it needs to get the date like this `2022-01-01T00:01:01Z` or `2022-01-01T00:01:01.555` this is now solved by using the dataType DATETIMEOFFSET which is the sql-column that handles this date-format.
 
 FIXED: The integer datatype is not handled when writing to a table, this is because all numbers are treated as float64 by the datahub.
