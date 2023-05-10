@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata"
 )
 
 type PostLayer struct {
@@ -258,7 +259,7 @@ func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields [
 				}
 			}
 
-			queryDel += queryDel + rowId + ";"
+			queryDel += rowId + ";"
 			_, err := postLayer.PostRepo.DB.Exec(queryDel)
 			if err != nil {
 				postLayer.logger.Error(err)
@@ -332,7 +333,6 @@ func (postLayer *PostLayer) upsertBulk(entities []*Entity, fields []*conf.FieldM
 							return err
 						}
 						time := fmt.Sprintf("%s", t.In(location).Format("2006-01-02T15:04:05"))
-						postLayer.logger.Debug(time)
 						columnValues += "'" + time + "',"
 					case "DATETIMEOFFSET":
 						columnValues += "'" + fmt.Sprintf("%s", value) + "',"
@@ -383,7 +383,6 @@ func (postLayer *PostLayer) upsertBulk(entities []*Entity, fields []*conf.FieldM
 							return err
 						}
 						time := fmt.Sprintf("%s", t.In(location).Format("2006-01-02T15:04:05"))
-						postLayer.logger.Debug(time)
 						rowId += "'" + time + "',"
 					case "DATETIMEOFFSET":
 						rowId += "'" + fmt.Sprintf("%s", value) + "',"
