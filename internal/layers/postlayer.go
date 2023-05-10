@@ -254,7 +254,7 @@ func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields [
 						}
 						rowId += fmt.Sprintf("%s", t)
 					default: // all other types can be sent as string
-						rowId += fmt.Sprintf("%s", value)
+						rowId += fmt.Sprintf("'%s'", value)
 					}
 				}
 			}
