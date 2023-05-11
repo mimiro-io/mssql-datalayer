@@ -285,7 +285,6 @@ func (postLayer *PostLayer) upsertBulk(entities []*Entity, fields []*conf.FieldM
 		if !strings.ContainsAny(post.ID, ":") {
 			continue
 		}
-
 		s := post.StripProps()
 		args := make([]interface{}, len(fields))
 		columnNames := ""
@@ -293,8 +292,10 @@ func (postLayer *PostLayer) upsertBulk(entities []*Entity, fields []*conf.FieldM
 		rowId := ""
 		InsertColumnNamesValues := ""
 		timeZone := postLayer.PostRepo.PostTableDef.TimeZone
-		if !post.IsDeleted { //If is deleted True --> Do not store
-			buildQuery += fmt.Sprintf("DELETE FROM %s WHERE %s= %s", postLayer.PostRepo.PostTableDef.TableName, postLayer.PostRepo.PostTableDef.IdColumn, strings.Split(post.ID, ":")[1])
+		if !post.IsDeleted { //If is deleted True just create the delete statement
+			idColumn := postLayer.PostRepo.PostTableDef.IdColumn
+			buildQuery += postLayer.createDelete(s, idColumn, fields)
+			//buildQuery += fmt.Sprintf("DELETE FROM %s WHERE %s= %s", postLayer.PostRepo.PostTableDef.TableName, postLayer.PostRepo.PostTableDef.IdColumn, strings.Split(post.ID, ":")[1])
 			buildQuery += ";"
 			buildQuery += fmt.Sprintf("INSERT INTO %s values (", strings.ToLower(postLayer.PostRepo.PostTableDef.TableName))
 			for i, field := range fields {
@@ -433,6 +434,47 @@ func (postLayer *PostLayer) GetTableDefinition(datasetName string) *conf.PostMap
 	return nil
 }
 
+func (postLayer *PostLayer) createDelete(s map[string]interface{}, idColumn string, fields []*conf.FieldMapping) string {
+	var value interface{}
+	for _, field := range fields {
+		if field.FieldName == idColumn {
+			propValue := s[field.FieldName]
+
+			if field.ResolveNamespace && propValue != nil {
+				value = uda.ToURI(postLayer.PostRepo.EntityContext, s[field.FieldName].(string))
+			} else {
+				value = propValue
+			}
+
+			datatype := strings.Split(field.DataType, "(")[0]
+			if value == nil {
+				if !postLayer.PostRepo.PostTableDef.NullEmptyColumnValues {
+					continue // TODO:Need to fail properly when this happens
+				}
+				value = cast.ToString(getSqlNull(datatype))
+			} else {
+				switch datatype {
+				case "BIT":
+					bit := "0"
+					if value.(bool) {
+						bit = "1"
+					}
+					value = bit
+				case "INT", "SMALLINT", "TINYINT", "INTEGER":
+					value = strconv.FormatInt(cast.ToInt64(value.(float64)), 10)
+				case "FLOAT", "DECIMAL", "NUMERIC":
+					value = fmt.Sprintf("%f", value)
+				default: // all other types can be sent as string
+					value = fmt.Sprintf("'%s'", value)
+				}
+			}
+		}
+	}
+	deleteStmt := fmt.Sprintf("DELETE FROM %s WHERE %s= %s"+";", postLayer.PostRepo.PostTableDef.TableName, postLayer.PostRepo.PostTableDef.IdColumn, value)
+
+	return deleteStmt
+
+}
 func (postLayer *PostLayer) ensureConnection() error {
 	postLayer.logger.Debug("Ensuring connection")
 	if postLayer.cmgr.State.Digest != postLayer.PostRepo.digest {
