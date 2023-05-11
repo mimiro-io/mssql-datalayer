@@ -259,7 +259,7 @@ func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields [
 				}
 			}
 
-			queryDel += rowId + ";"
+			queryDel += rowId
 			_, err := postLayer.PostRepo.DB.Exec(queryDel)
 			if err != nil {
 				postLayer.logger.Error(err)
