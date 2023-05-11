@@ -150,8 +150,8 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity,
 	return nil
 }
 func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields []*conf.FieldMapping, queryDel string) error {
-	rowId := ""
 	for _, post := range entities {
+		rowId := ""
 		s := post.StripProps()
 		if !strings.ContainsAny(post.ID, ":") {
 			continue
