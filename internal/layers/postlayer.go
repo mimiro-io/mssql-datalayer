@@ -125,7 +125,7 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity,
 			groupCount = 20
 		}
 		if len(entities) < groupCount {
-			err := postLayer.upsertBulk(entities, fields, queryDel)
+			err := postLayer.UpsertBulk(entities, fields, queryDel)
 			if err != nil {
 				return err
 			}
@@ -133,7 +133,7 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity,
 			for i := 0; i < groupCount; i++ {
 				entslice := entities[(len(entities)/groupCount)*i : (((len(entities) / groupCount) * i) + len(entities)/groupCount)]
 				g.Go(func() error {
-					err := postLayer.upsertBulk(entslice, fields, queryDel)
+					err := postLayer.UpsertBulk(entslice, fields, queryDel)
 					if err != nil {
 						return err
 					}
@@ -145,11 +145,11 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity,
 			}
 		}
 	} else {
-		return postLayer.execQuery(entities, query, fields, queryDel)
+		return postLayer.ExecQuery(entities, query, fields, queryDel)
 	}
 	return nil
 }
-func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields []*conf.FieldMapping, queryDel string) error {
+func (postLayer *PostLayer) ExecQuery(entities []*Entity, query string, fields []*conf.FieldMapping, queryDel string) error {
 	for _, post := range entities {
 		rowId := ""
 		s := post.StripProps()
@@ -269,7 +269,7 @@ func (postLayer *PostLayer) execQuery(entities []*Entity, query string, fields [
 	return nil
 }
 
-func (postLayer *PostLayer) upsertBulk(entities []*Entity, fields []*conf.FieldMapping, queryDel string) error {
+func (postLayer *PostLayer) UpsertBulk(entities []*Entity, fields []*conf.FieldMapping, queryDel string) error {
 	tx, err := postLayer.PostRepo.DB.Begin()
 	if err != nil {
 		return err
@@ -313,7 +313,7 @@ func (postLayer *PostLayer) upsertBulk(entities []*Entity, fields []*conf.FieldM
 					if !postLayer.PostRepo.PostTableDef.NullEmptyColumnValues {
 						continue // TODO:Need to fail properly when this happens
 					}
-					columnValues += cast.ToString(getSqlNull(datatype))
+					columnValues += "'" + cast.ToString(getSqlNull(datatype)) + "',"
 				} else {
 					switch datatype {
 					case "BIT":
@@ -372,7 +372,7 @@ func (postLayer *PostLayer) upsertBulk(entities []*Entity, fields []*conf.FieldM
 							bit = "1"
 						}
 						rowId += bit
-					case "INT", "SMALLINT", "TINYINT", "INTEGER":
+					case "INT", "BIGINT", "SMALLINT", "TINYINT", "INTEGER":
 						rowId += strconv.FormatInt(cast.ToInt64(value.(float64)), 10)
 					case "FLOAT", "DECIMAL", "NUMERIC":
 						rowId += fmt.Sprintf("%f", value)
