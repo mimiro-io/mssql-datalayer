@@ -53,7 +53,7 @@ type PostMapping struct {
 	Config                *TableConfig    `json:"config"`
 	FieldMappings         []*FieldMapping `json:"fieldMappings"`
 	NullEmptyColumnValues bool            `json:"nullEmptyColumnValues"`
-	TimeZone              string          `json:"timeZone"`
+	TimeZone              string          `json:"timezone"`
 	BatchSize             int             `json:"batchSize"`
 	Workers               int             `json:"workers"`
 }

@@ -80,7 +80,7 @@
             "query": "INSERT INTO Test (Id,Column_Int,Column_Tinyint,Column_Smallint,Column_Bit,Column_Float,Column_Datetime,Column_Datetime2,Column_Varchar,Column_Decimal,Column_Numeric,Column_Date) VALUES (@pId,@pColumn_Int,@pColumn_Tinyint,@pColumn_Smallint,@pColumn_Bit,@pColumn_Float,@pColumn_Datetime,@pColumn_Datetime2,@pColumn_Varchar,@pColumn_Decimal,@pColumn_Numeric,@pColumn_Date)",
             "tableName": "test2",
             "nullEmptyColumnValues": true,
-            "timeZone": "Europe/Oslo",
+            "timezone": "Europe/Oslo",
             "idColumn": "Id"
         }]
 }

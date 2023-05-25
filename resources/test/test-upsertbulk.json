@@ -81,7 +81,7 @@
             "tableName": "test",
             "batchSize": 10000,
             "workers": 20,
-            "timeZone": "Europe/Oslo",
+            "timezone": "Europe/Oslo",
             "idColumn": "Id"
         }]
 }

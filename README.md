@@ -175,7 +175,7 @@ It is strongly recommended to leave the Password and User fields empty.
             "idColumn": "Id",
             "batchSize": 10000,
             "workers": 20,
-            "timeZone": "Europe/Oslo"
+            "timezone": "Europe/Oslo"
         }],
     "tableMappings": [
         {
@@ -318,7 +318,7 @@ NB! Posting to a table requires you to make use of the 'latestOnly' feature in t
 
 `workers` amount of concurrent threads running on posting to a table in a database with upsertBulk
 
-`timeZone` the receiving database time zone
+`timezone` the receiving database time zone
 
 ### FieldMapping config
 
