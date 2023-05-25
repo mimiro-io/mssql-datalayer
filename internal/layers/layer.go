@@ -349,16 +349,16 @@ func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.C
 					val = (*ptrToNullDatetime).Time
 					var location *time.Location
 					var err error
-					if tableDef.Timezone != "" {
-						location, err = time.LoadLocation(tableDef.Timezone)
+					if tableDef.TimeZone != "" {
+						location, err = time.LoadLocation(tableDef.TimeZone)
 						if err != nil {
-							l.logger.Errorf("Error parsing timezone from table definition: %s", err)
+							l.logger.Errorf("Error parsing TimeZone from table definition: %s", err)
 							return nil
 						}
-					} else if l.cmgr.Datalayer.Timezone != "" {
-						location, err = time.LoadLocation(l.cmgr.Datalayer.Timezone)
+					} else if l.cmgr.Datalayer.TimeZone != "" {
+						location, err = time.LoadLocation(l.cmgr.Datalayer.TimeZone)
 						if err != nil {
-							l.logger.Errorf("Error parsing timezone from db definition: %s", err)
+							l.logger.Errorf("Error parsing TimeZone from db definition: %s", err)
 							return nil
 						}
 					} else {

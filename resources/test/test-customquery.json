@@ -1,0 +1,86 @@
+{
+    "baseNameSpace": "http://data.mimiro.io/test/",
+    "baseUri": "http://data.mimiro.io/test/",
+    "database": "MYDB1",
+    "databaseServer": "localhost",
+    "id": "test",
+    "password": "Test1234",
+    "user": "sa",
+    "port": "1433",
+    "postMappings": [
+        {
+            "datasetName": "test2",
+            "fieldMappings": [
+                {
+                    "fieldName": "Id",
+                    "order": 1,
+                    "dataType": "VARCHAR(255)"
+                },
+                {
+                    "fieldName": "Column_Int",
+                    "order": 2,
+                    "dataType": "INT"
+                },
+                {
+                    "fieldName": "Column_Tinyint",
+                    "order": 3,
+                    "dataType": "TINYINT"
+                },
+                {
+                    "fieldName": "Column_Smallint",
+                    "order": 4,
+                    "dataType": "SMALLINT"
+                },
+                {
+                    "fieldName": "Column_Bit",
+                    "order": 5,
+                    "dataType": "BIT"
+                },
+                {
+                    "fieldName": "Column_Float",
+                    "order": 6,
+                    "dataType": "FLOAT"
+                },
+                {
+                    "fieldName": "Column_Datetime",
+                    "order": 7,
+                    "dataType": "DATETIME"
+                },
+                {
+                    "fieldName": "Column_Datetime2",
+                    "order": 8,
+                    "dataType": "DATETIME2"
+                },
+                {
+                    "fieldName": "Column_DatetimeOffset",
+                    "order": 9,
+                    "dataType": "DATETIMEOFFSET"
+                },
+                {
+                    "fieldName": "Column_Varchar",
+                    "order": 10,
+                    "dataType": "VARCHAR(255)"
+                },
+                {
+                    "fieldName": "Column_Decimal",
+                    "order": 11,
+                    "dataType": "DECIMAL"
+                },
+                {
+                    "fieldName": "Column_Numeric",
+                    "order": 12,
+                    "dataType": "NUMERIC"
+                },
+                {
+                    "fieldName": "Column_Date",
+                    "order": 13,
+                    "dataType": "DATE"
+                }
+            ],
+            "query": "INSERT INTO Test (Id,Column_Int,Column_Tinyint,Column_Smallint,Column_Bit,Column_Float,Column_Datetime,Column_Datetime2,Column_Varchar,Column_Decimal,Column_Numeric,Column_Date) VALUES (@pId,@pColumn_Int,@pColumn_Tinyint,@pColumn_Smallint,@pColumn_Bit,@pColumn_Float,@pColumn_Datetime,@pColumn_Datetime2,@pColumn_Varchar,@pColumn_Decimal,@pColumn_Numeric,@pColumn_Date)",
+            "tableName": "test2",
+            "nullEmptyColumnValues": true,
+            "timeZone": "Europe/Oslo",
+            "idColumn": "Id"
+        }]
+}

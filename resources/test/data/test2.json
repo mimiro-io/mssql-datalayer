@@ -8,6 +8,11 @@
     },
     {
         "id": "a:1",
+        "deleted": true,
+        "recorded": 12345158168,
+        "refs": {
+            "a:ref1": "c:reffing"
+        },
         "props": {
             "a:Id": "a:1",
             "a:Column_Int": 12344556,
@@ -17,7 +22,54 @@
             "b:Column_Float": 7.99,
             "b:Column_Datetime": "2023-01-01T01:01:01+01:00",
             "b:Column_Datetime2": "2023-01-01T01:01:01+02:00",
-            "b:Column_Varchar": "b:string"
+            "b:Column_Varchar": "b:string",
+            "b:Column_Decimal": 90.09,
+            "b:Column_Numeric": 211.11,
+            "b:Column_Date": "2023-01-01"
+        }
+    },
+    {
+        "id": "a:2",
+        "deleted": true,
+        "recorded": 12351591859,
+        "refs": {
+            "a:ref1": "c:reffing"
+        },
+        "props": {
+            "a:Id": "a:2",
+            "a:Column_Int": 12344556,
+            "a:Column_Tinyint": 13,
+            "a:Column_Smallint": 41,
+            "b:Column_Bit": false,
+            "b:Column_Float": 7.99,
+            "b:Column_Datetime": "2023-01-01T01:01:01+01:00",
+            "b:Column_Datetime2": "2023-01-01T01:01:01+02:00",
+            "b:Column_Varchar": "b:string",
+            "b:Column_Decimal": 90.09,
+            "b:Column_Numeric": 211.11,
+            "b:Column_Date": "2023-01-01"
+        }
+    },
+    {
+        "id": "a:3",
+        "deleted": false,
+        "recorded": 12351591859,
+        "refs": {
+            "a:ref1": "c:reffing"
+        },
+        "props": {
+            "a:Id": "a:3",
+            "a:Column_Int": 12344556,
+            "a:Column_Tinyint": 13,
+            "a:Column_Smallint": 41,
+            "b:Column_Bit": false,
+            "b:Column_Float": 7.99,
+            "b:Column_Datetime": "2023-01-01T01:01:01+01:00",
+            "b:Column_Datetime2": "2023-01-01T01:01:01+02:00",
+            "b:Column_Varchar": "b:string",
+            "b:Column_Decimal": 90.09,
+            "b:Column_Numeric": 211.11,
+            "b:Column_Date": "2023-01-01"
         }
     },
     {
