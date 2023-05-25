@@ -64,7 +64,7 @@ func TestUpsertBulk(t *testing.T) {
 			resultSlice := strings.Split(query, ";")
 
 			g.Assert(resultSlice).IsNotNil()
-			g.Assert(len(resultSlice)).Eql(6)
+			g.Assert(len(resultSlice)).Eql(7)
 			g.Assert(resultSlice[0]).Eql("DELETE FROM test WHERE Id = 'a:1'")
 			g.Assert(resultSlice[1]).Eql("DELETE FROM test WHERE Id = 'a:2'")
 			g.Assert(resultSlice[2]).Eql("DELETE FROM test WHERE Id = 'a:3'")
