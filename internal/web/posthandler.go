@@ -45,7 +45,7 @@ func (handler *postHandler) postHandler(c echo.Context) error {
 	postLayer.PostRepo.PostTableDef = postLayer.GetTableDefinition(datasetName)
 	//if not set, set batch size to default batch size of data hub
 	batchSize := postLayer.PostRepo.PostTableDef.BatchSize
-	if batchSize < 0 {
+	if batchSize < 0 || batchSize == 0 {
 		batchSize = 10000
 	}
 	read := 0

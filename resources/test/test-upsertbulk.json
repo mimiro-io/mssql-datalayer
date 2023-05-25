@@ -1,0 +1,87 @@
+{
+    "baseNameSpace": "http://data.mimiro.io/test/",
+    "baseUri": "http://data.mimiro.io/test/",
+    "database": "MYDB1",
+    "databaseServer": "localhost",
+    "id": "test",
+    "password": "Test1234",
+    "user": "sa",
+    "port": "1433",
+    "postMappings": [
+        {
+            "datasetName": "test.Sql",
+            "fieldMappings": [
+                {
+                    "fieldName": "Id",
+                    "order": 1,
+                    "dataType": "VARCHAR(255)"
+                },
+                {
+                    "fieldName": "Column_Int",
+                    "order": 2,
+                    "dataType": "INT"
+                },
+                {
+                    "fieldName": "Column_Tinyint",
+                    "order": 3,
+                    "dataType": "TINYINT"
+                },
+                {
+                    "fieldName": "Column_Smallint",
+                    "order": 4,
+                    "dataType": "SMALLINT"
+                },
+                {
+                    "fieldName": "Column_Bit",
+                    "order": 5,
+                    "dataType": "BIT"
+                },
+                {
+                    "fieldName": "Column_Float",
+                    "order": 6,
+                    "dataType": "FLOAT"
+                },
+                {
+                    "fieldName": "Column_Datetime",
+                    "order": 7,
+                    "dataType": "DATETIME"
+                },
+                {
+                    "fieldName": "Column_Datetime2",
+                    "order": 8,
+                    "dataType": "DATETIME2"
+                },
+                {
+                    "fieldName": "Column_DatetimeOffset",
+                    "order": 9,
+                    "dataType": "DATETIMEOFFSET"
+                },
+                {
+                    "fieldName": "Column_Varchar",
+                    "order": 10,
+                    "dataType": "VARCHAR(255)"
+                },
+                {
+                    "fieldName": "Column_Decimal",
+                    "order": 11,
+                    "dataType": "DECIMAL"
+                },
+                {
+                    "fieldName": "Column_Numeric",
+                    "order": 12,
+                    "dataType": "NUMERIC"
+                },
+                {
+                    "fieldName": "Column_Date",
+                    "order": 13,
+                    "dataType": "DATE"
+                }
+            ],
+            "query": "upsertBulk",
+            "tableName": "test",
+            "batchSize": 10000,
+            "workers": 20,
+            "timezone": "Europe/Oslo",
+            "idColumn": "Id"
+        }]
+}

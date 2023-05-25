@@ -19,7 +19,7 @@ type Datalayer struct {
 	Instance       string          `json:"instance"`
 	TableMappings  []*TableMapping `json:"tableMappings"`
 	PostMappings   []*PostMapping  `json:"postMappings"`
-	Timezone       string          `json:"timezone"`
+	TimeZone       string          `json:"timezone"`
 }
 
 type TableMapping struct {
@@ -32,7 +32,7 @@ type TableMapping struct {
 	Types               []string         `json:"types"`
 	ColumnMappings      []*ColumnMapping `json:"columnMappings"`
 	Config              *TableConfig     `json:"config"`
-	Timezone            string           `json:"timezone"`
+	TimeZone            string           `json:"timezone"`
 	Columns             map[string]*ColumnMapping
 }
 
@@ -53,7 +53,7 @@ type PostMapping struct {
 	Config                *TableConfig    `json:"config"`
 	FieldMappings         []*FieldMapping `json:"fieldMappings"`
 	NullEmptyColumnValues bool            `json:"nullEmptyColumnValues"`
-	TimeZone              string          `json:"timeZone"`
+	TimeZone              string          `json:"timezone"`
 	BatchSize             int             `json:"batchSize"`
 	Workers               int             `json:"workers"`
 }
