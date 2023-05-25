@@ -11,7 +11,6 @@ import (
 	"testing"
 )
 
-// Query:         "INSERT INTO Test (Id,Column_Int,Column_Tinyint,Column_Smallint,Column_Bit,Column_Float,Column_Datetime,Column_Datetime2,Column_Varchar,Column_Decimal,Column_Numeric,Column_Date) VALUES (112341234,2,3,0,12.65,'2023-01-01T01:01:01.000','2023-01-01T02:02:02.222','Test',90.09, 211.11,'2023-01-01')",
 func TestUpsertBulk(t *testing.T) {
 	g := goblin.Goblin(t)
 	g.Describe("The postlayer", func() {
