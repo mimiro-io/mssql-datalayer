@@ -69,7 +69,8 @@ func TestUpsertBulk(t *testing.T) {
 			g.Assert(resultSlice[1]).Eql("DELETE FROM test WHERE Id = 'a:2'")
 			g.Assert(resultSlice[2]).Eql("DELETE FROM test WHERE Id = 'a:3'")
 			g.Assert(resultSlice[3]).Eql("INSERT INTO test (Id, Column_Int, Column_Tinyint, Column_Smallint, Column_Bit, Column_Float, Column_Datetime, Column_Datetime2, Column_DatetimeOffset, Column_Varchar, Column_Decimal, Column_Numeric, Column_Date ) VALUES ( 'a:3',12344556,13,41,0,7.990000,'2023-01-01T01:01:01','2023-01-01T00:01:01','2023-01-01T01:01:01+02:00','b:string',90.090000,211.110000,'2023-01-01' )")
-			g.Assert(resultSlice[4]).Eql("INSERT INTO test (Id, Column_Int, Column_Tinyint, Column_Smallint, Column_Bit, Column_Float, Column_Varchar, Column_Decimal, Column_Numeric ) VALUES ( 'a:3',12344556,13,41,0,7.990000,'b:string',90.090000,211.110000 )")
+			g.Assert(resultSlice[4]).Eql("DELETE FROM test WHERE Id = 'a:4'")
+			g.Assert(resultSlice[5]).Eql("INSERT INTO test (Id, Column_Int, Column_Tinyint, Column_Smallint, Column_Bit, Column_Float, Column_Varchar, Column_Decimal, Column_Numeric ) VALUES ( 'a:4',12344556,13,41,0,7.990000,'b:string',90.090000,211.110000 )")
 
 		})
 		g.It("Should create user defined statement", func() {
@@ -103,7 +104,6 @@ func TestUpsertBulk(t *testing.T) {
 			g.Assert(delTest1).Eql("DELETE FROM test WHERE Id = 'a:1';")
 			g.Assert(delTest2).Eql("DELETE FROM test WHERE Id = 'a:2';")
 			g.Assert(delTest3).Eql("DELETE FROM test WHERE Id = 'a:3';")
-			t.Log(delTest3)
 			//DELETE FROM test WHERE Id = 'a:2';DELETE FROM test WHERE Id = 'a:3';INSERT INTO test (Id, Column_Int, Column_Tinyint, Column_Smallint, Column_Bit, Column_Float, Column_Datetime, Column_Datetime2, Column_DatetimeOffset, Column_Varchar, Column_Decimal, Column_Numeric, Column_Date ) VALUES ( 'a:3',12344556,13,41,0,7.990000,'2023-01-01T01:01:01','2023-01-01T00:01:01','2023-01-01T01:01:01+02:00','b:string',90.090000,211.110000,'2023-01-01' );")
 		})
 	})
