@@ -26,6 +26,8 @@ RUN go test ./... -v
 FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
+#Fix vulnerability CVE-2023-2650
+RUN apk update && apk add --upgrade libcrypto3 libssl3
 
 WORKDIR /root/
 
