@@ -59,7 +59,6 @@ func (postLayer *PostLayer) connect() (*sql.DB, error) {
 
 	u := postLayer.cmgr.Datalayer.GetPostUrl(postLayer.PostRepo.PostTableDef)
 	db, err := sql.Open("sqlserver", u.String())
-
 	if err != nil {
 		postLayer.logger.Warn("Error creating connection pool: ", err.Error())
 		return nil, err
@@ -240,22 +239,13 @@ func (postLayer *PostLayer) UpsertBulk(entities []*Entity, fields []*conf.FieldM
 	if buildQuery == "" {
 		return fmt.Errorf("could not resolve datetime, error in creating stmt")
 	}
-	tx, err := postLayer.PostRepo.DB.Begin()
+	conn, err := postLayer.PostRepo.DB.Conn(postLayer.PostRepo.ctx)
+	conn.PingContext(postLayer.PostRepo.ctx)
 	if err != nil {
 		return err
 	}
-	txOK := false
-	defer func() {
-		if !txOK {
-			tx.Rollback()
-		}
-	}()
-	_, err = tx.Exec(buildQuery)
-
-	if err != nil {
-		return err
-	}
-	tx.Commit()
+	conn.ExecContext(postLayer.PostRepo.ctx, buildQuery)
+	conn.Close()
 	return nil
 }
 
