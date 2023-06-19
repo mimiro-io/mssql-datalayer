@@ -26,6 +26,7 @@ func TestUpsertBulk(t *testing.T) {
 			pl := &layers.PostLayer{
 				PostRepo: &layers.PostRepository{},
 			}
+
 			pl.PostRepo.PostTableDef = datalayer.PostMappings[0]
 			// Do checks so that we read all properties from postmappings correctly
 			g.Assert(pl.PostRepo.PostTableDef.DatasetName).IsNotNil()
@@ -58,7 +59,7 @@ func TestUpsertBulk(t *testing.T) {
 				PostRepo: &layers.PostRepository{},
 			}
 			pl.PostRepo.PostTableDef = datalayer.PostMappings[0]
-			query := (*layers.PostLayer).CreateUpsertBulk(pl, entities, pl.PostRepo.PostTableDef.FieldMappings, "DELETE FROM test WHERE Id = ")
+			query := (*layers.PostLayer).CreateUpsertBulk(pl, entities, pl.PostRepo.PostTableDef.FieldMappings, "DELETE FROM test WHERE Id = ", "Id", "Europe/Oslo", "test")
 			g.Assert(query).Eql("DELETE FROM test WHERE Id = 'a:1';DELETE FROM test WHERE Id = 'a:2';DELETE FROM test WHERE Id = 'a:3';INSERT INTO test (Id, Column_Int, Column_Tinyint, Column_Smallint, Column_Bit, Column_Float, Column_Datetime, Column_Datetime2, Column_DatetimeOffset, Column_Varchar, Column_Decimal, Column_Numeric, Column_Date ) VALUES ( 'a:3',12344556,13,41,0,7.990000,'2023-01-01T01:01:01','2023-01-01T00:01:01','2023-01-01T01:01:01+02:00','b:string',90.090000,211.110000,'2023-01-01' );DELETE FROM test WHERE Id = 'a:4';INSERT INTO test (Id, Column_Int, Column_Tinyint, Column_Smallint, Column_Bit, Column_Float, Column_Varchar, Column_Decimal, Column_Numeric ) VALUES ( 'a:4',12344556,13,41,0,7.990000,'b:string',90.090000,211.110000 );")
 			resultSlice := strings.Split(query, ";")
 

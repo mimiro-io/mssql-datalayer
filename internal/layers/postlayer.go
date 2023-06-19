@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cast"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 	"log"
 	"sort"
 	"strconv"
@@ -22,7 +21,7 @@ import (
 )
 
 type PostLayer struct {
-	cmgr     *conf.ConfigurationManager //
+	Cmgr     *conf.ConfigurationManager //
 	logger   *zap.SugaredLogger
 	PostRepo *PostRepository
 }
@@ -36,11 +35,10 @@ type PostRepository struct {
 
 func NewPostLayer(lc fx.Lifecycle, cmgr *conf.ConfigurationManager, logger *zap.SugaredLogger) *PostLayer {
 	postLayer := &PostLayer{logger: logger.Named("layer")}
-	postLayer.cmgr = cmgr
+	postLayer.Cmgr = cmgr
 	postLayer.PostRepo = &PostRepository{
 		ctx: context.Background(),
 	}
-
 	_ = postLayer.ensureConnection()
 
 	lc.Append(fx.Hook{
@@ -55,9 +53,9 @@ func NewPostLayer(lc fx.Lifecycle, cmgr *conf.ConfigurationManager, logger *zap.
 	return postLayer
 }
 
-func (postLayer *PostLayer) connect() (*sql.DB, error) {
+func (postLayer *PostLayer) Connect() (*sql.DB, error) {
 
-	u := postLayer.cmgr.Datalayer.GetPostUrl(postLayer.PostRepo.PostTableDef)
+	u := postLayer.Cmgr.Datalayer.GetPostUrl(postLayer.PostRepo.PostTableDef)
 	db, err := sql.Open("sqlserver", u.String())
 	if err != nil {
 		postLayer.logger.Warn("Error creating connection pool: ", err.Error())
@@ -73,30 +71,26 @@ func (postLayer *PostLayer) connect() (*sql.DB, error) {
 
 func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity, entityContext *uda.Context) error {
 
-	postLayer.PostRepo.PostTableDef = postLayer.GetTableDefinition(datasetName)
 	if postLayer.PostRepo.PostTableDef == nil {
 		return errors.New(fmt.Sprintf("No configuration found for dataset: %s", datasetName))
 	}
-
+	postLayer.PostRepo.PostTableDef = postLayer.GetTableDefinition(datasetName)
+	idColumn, timeZone, tableName, query, fields := postLayer.setVars()
 	postLayer.PostRepo.EntityContext = entityContext
 
 	if postLayer.PostRepo.DB == nil {
-		db, err := postLayer.connect() // errors are already logged
+		db, err := postLayer.Connect() // errors are already logged
 		if err != nil {
 			return err
 		}
 		postLayer.PostRepo.DB = db
 	}
 
-	query := postLayer.PostRepo.PostTableDef.Query
-
 	if query == "" {
 		postLayer.logger.Errorf("Please add query in config for %s in ", datasetName)
 		return errors.New(fmt.Sprintf("no query found in config for dataset: %s", datasetName))
 	}
-	queryDel := fmt.Sprintf(`DELETE FROM %s WHERE %s =`, postLayer.PostRepo.PostTableDef.TableName, postLayer.PostRepo.PostTableDef.IdColumn)
-
-	fields := postLayer.PostRepo.PostTableDef.FieldMappings
+	queryDel := fmt.Sprintf(`DELETE FROM %s WHERE %s =`, tableName, idColumn)
 
 	if len(fields) == 0 {
 		postLayer.logger.Errorf("Please define all fields in config that is involved in dataset %s and query: %s", datasetName, query)
@@ -118,32 +112,7 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity,
 		})
 	}
 	if query == "upsertBulk" {
-		g := new(errgroup.Group)
-		// create x parallel inserts with len(entities)/x rows in each default x = 20 and len(entities) = 10000
-		groupCount := postLayer.PostRepo.PostTableDef.Workers
-		if groupCount < 0 {
-			groupCount = 20
-		}
-		if len(entities) < groupCount {
-			err := postLayer.UpsertBulk(entities, fields, queryDel)
-			if err != nil {
-				return err
-			}
-		} else {
-			for i := 0; i < groupCount; i++ {
-				entslice := entities[(len(entities)/groupCount)*i : (((len(entities) / groupCount) * i) + len(entities)/groupCount)]
-				g.Go(func() error {
-					err := postLayer.UpsertBulk(entslice, fields, queryDel)
-					if err != nil {
-						return err
-					}
-					return err
-				})
-			}
-			if err := g.Wait(); err != nil {
-				return err
-			}
-		}
+		return postLayer.UpsertBulk(entities, fields, queryDel, idColumn, timeZone, tableName)
 	} else {
 		return postLayer.CustomQuery(entities, query, fields, queryDel)
 	}
@@ -234,17 +203,27 @@ func (postLayer *PostLayer) CustomDelete(post *Entity, fields []*conf.FieldMappi
 	return delQueue
 }
 
-func (postLayer *PostLayer) UpsertBulk(entities []*Entity, fields []*conf.FieldMapping, queryDel string) error {
-	buildQuery := postLayer.CreateUpsertBulk(entities, fields, queryDel)
+func (postLayer *PostLayer) UpsertBulk(entities []*Entity, fields []*conf.FieldMapping, queryDel string, idColumn string, timeZone string, tableName string) error {
+	buildQuery := postLayer.CreateUpsertBulk(entities, fields, queryDel, idColumn, timeZone, tableName)
 	if buildQuery == "" {
 		return fmt.Errorf("could not resolve datetime, error in creating stmt")
 	}
 	conn, err := postLayer.PostRepo.DB.Conn(postLayer.PostRepo.ctx)
-	conn.PingContext(postLayer.PostRepo.ctx)
+
 	if err != nil {
+		conn.Close()
 		return err
 	}
-	conn.ExecContext(postLayer.PostRepo.ctx, buildQuery)
+	err = conn.PingContext(postLayer.PostRepo.ctx)
+	if err != nil {
+		conn.Close()
+		return err
+	}
+	_, err = conn.ExecContext(postLayer.PostRepo.ctx, buildQuery)
+	if err != nil {
+		conn.Close()
+		return err
+	}
 	conn.Close()
 	return nil
 }
@@ -323,7 +302,7 @@ func getSqlNull(datatype string) any {
 		return sql.RawBytes{}
 	}
 }
-func (postLayer *PostLayer) CreateUpsertBulk(entities []*Entity, fields []*conf.FieldMapping, queryDel string) string {
+func (postLayer *PostLayer) CreateUpsertBulk(entities []*Entity, fields []*conf.FieldMapping, queryDel string, idColumn string, timeZone string, tableName string) string {
 	buildQuery := ""
 	for _, post := range entities {
 		if !strings.ContainsAny(post.ID, ":") {
@@ -331,15 +310,12 @@ func (postLayer *PostLayer) CreateUpsertBulk(entities []*Entity, fields []*conf.
 		}
 		s := post.StripProps()
 		args := make([]interface{}, len(fields))
-		//columnNames := ""
 		columnValues := ""
 		rowId := ""
 		InsertColumnNamesValues := ""
-		timeZone := postLayer.PostRepo.PostTableDef.TimeZone
 		if !post.IsDeleted { //If is deleted True just create the delete statement
-			idColumn := postLayer.PostRepo.PostTableDef.IdColumn
-			buildQuery += postLayer.createDelete(s, idColumn, fields)
-			buildQuery += fmt.Sprintf("INSERT INTO %s (", strings.ToLower(postLayer.PostRepo.PostTableDef.TableName))
+			buildQuery += postLayer.createDelete(s, idColumn, fields, tableName)
+			buildQuery += fmt.Sprintf("INSERT INTO %s (", strings.ToLower(tableName))
 			for i, field := range fields {
 				var value interface{}
 
@@ -383,10 +359,9 @@ func (postLayer *PostLayer) CreateUpsertBulk(entities []*Entity, fields []*conf.
 						columnValues += fmt.Sprintf("'%s',", value)
 					}
 				}
-				if field.FieldName == postLayer.PostRepo.PostTableDef.IdColumn {
+				if field.FieldName == idColumn {
 					rowId = strings.TrimRight(columnValues, ",")
 				}
-				//columnNames += fmt.Sprintf("%s,", field.FieldName)
 				InsertColumnNamesValues += fmt.Sprintf("%s, ", field.FieldName)
 
 			}
@@ -405,7 +380,7 @@ func (postLayer *PostLayer) CreateUpsertBulk(entities []*Entity, fields []*conf.
 				}
 				datatype := strings.Split(field.DataType, "(")[0]
 
-				if field.FieldName == postLayer.PostRepo.PostTableDef.IdColumn {
+				if field.FieldName == idColumn {
 					switch datatype {
 					case "BIT":
 						bit := "0"
@@ -440,7 +415,7 @@ func (postLayer *PostLayer) CreateUpsertBulk(entities []*Entity, fields []*conf.
 }
 
 func (postLayer *PostLayer) GetTableDefinition(datasetName string) *conf.PostMapping {
-	for _, table := range postLayer.cmgr.Datalayer.PostMappings {
+	for _, table := range postLayer.Cmgr.Datalayer.PostMappings {
 		if table.DatasetName == datasetName {
 			return table
 		} else if table.TableName == datasetName { // fallback
@@ -450,7 +425,7 @@ func (postLayer *PostLayer) GetTableDefinition(datasetName string) *conf.PostMap
 	return nil
 }
 
-func (postLayer *PostLayer) createDelete(s map[string]interface{}, idColumn string, fields []*conf.FieldMapping) string {
+func (postLayer *PostLayer) createDelete(s map[string]interface{}, idColumn string, fields []*conf.FieldMapping, tableName string) string {
 	var value interface{}
 	for _, field := range fields {
 		if field.FieldName == idColumn {
@@ -484,26 +459,36 @@ func (postLayer *PostLayer) createDelete(s map[string]interface{}, idColumn stri
 					value = fmt.Sprintf("'%s'", value)
 				}
 			}
+
 		}
 	}
-	deleteStmt := fmt.Sprintf("DELETE FROM %s WHERE %s = %s"+";", postLayer.PostRepo.PostTableDef.TableName, postLayer.PostRepo.PostTableDef.IdColumn, value)
 
+	deleteStmt := fmt.Sprintf("DELETE FROM %s WHERE %s = %s"+";", tableName, idColumn, value)
 	return deleteStmt
+}
 
+func (postLayer *PostLayer) setVars() (string, string, string, string, []*conf.FieldMapping) {
+	// set props to pass on
+	idColumn := postLayer.PostRepo.PostTableDef.IdColumn
+	timeZone := postLayer.PostRepo.PostTableDef.TimeZone
+	tableName := postLayer.PostRepo.PostTableDef.TableName
+	query := postLayer.PostRepo.PostTableDef.Query
+	fields := postLayer.PostRepo.PostTableDef.FieldMappings
+	return idColumn, timeZone, tableName, query, fields
 }
 func (postLayer *PostLayer) ensureConnection() error {
 	postLayer.logger.Debug("Ensuring connection")
-	if postLayer.cmgr.State.Digest != postLayer.PostRepo.digest {
+	if postLayer.Cmgr.State.Digest != postLayer.PostRepo.digest {
 		postLayer.logger.Debug("Configuration has changed need to reset connection")
 		if postLayer.PostRepo.DB != nil {
 			postLayer.PostRepo.DB.Close() // don't really care about the error, as long as it is closed
 		}
-		db, err := postLayer.connect() // errors are already logged
+		db, err := postLayer.Connect() // errors are already logged
 		if err != nil {
 			return err
 		}
 		postLayer.PostRepo.DB = db
-		postLayer.PostRepo.digest = postLayer.cmgr.State.Digest
+		postLayer.PostRepo.digest = postLayer.Cmgr.State.Digest
 	}
 	return nil
 }

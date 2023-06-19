@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"github.com/bcicen/jstream"
 	"github.com/labstack/echo/v4"
@@ -9,6 +10,7 @@ import (
 	"github.com/mimiro-io/mssqldatalayer/internal/layers"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"net/http"
 	"net/url"
@@ -36,14 +38,28 @@ func NewPostHandler(lc fx.Lifecycle, e *echo.Echo, mw *Middleware, logger *zap.S
 	})
 
 }
-
 func (handler *postHandler) postHandler(c echo.Context) error {
 	datasetName, _ := url.QueryUnescape(c.Param("dataset"))
 	handler.logger.Debugf("Working on dataset %s", datasetName)
-
 	postLayer := handler.postLayer
 	postLayer.PostRepo.PostTableDef = postLayer.GetTableDefinition(datasetName)
-	//if not set, set batch size to default batch size of data hub
+	// get database handle
+	if handler.postLayer.PostRepo.DB == nil {
+		u := handler.postLayer.Cmgr.Datalayer.GetPostUrl(postLayer.PostRepo.PostTableDef)
+		db, err := sql.Open("sqlserver", u.String())
+		if err != nil {
+			handler.logger.Warn("Error creating connection pool: ", err.Error())
+			return err
+		}
+		err = db.Ping()
+		if err != nil {
+			handler.logger.Warn(err.Error())
+			return err
+		}
+		handler.postLayer.PostRepo.DB = db
+	}
+
+	groupCount := handler.postLayer.PostRepo.PostTableDef.Workers
 	batchSize := postLayer.PostRepo.PostTableDef.BatchSize
 	if batchSize < 0 || batchSize == 0 {
 		batchSize = 10000
@@ -64,16 +80,37 @@ func (handler *postHandler) postHandler(c echo.Context) error {
 			read++
 			if read == batchSize {
 				read = 0
+				g := new(errgroup.Group)
+				// create x parallel inserts with len(entities)/x rows in each default x = 20 and len(entities) = 10000
 
-				err := postLayer.PostEntities(datasetName, entities, entityContext)
-				if err != nil {
-					handler.logger.Error(err)
-					return err
+				if groupCount < 0 {
+					groupCount = 20
 				}
-				entities = make([]*layers.Entity, 0)
+				if len(entities) < groupCount {
+					err := postLayer.PostEntities(datasetName, entities, entityContext)
+					if err != nil {
+						return err
+					}
+				} else {
+					for i := 0; i < groupCount; i++ {
+						entslice := entities[(len(entities)/groupCount)*i : (((len(entities) / groupCount) * i) + len(entities)/groupCount)]
+						g.Go(func() error {
+							err := postLayer.PostEntities(datasetName, entslice, entityContext)
+							if err != nil {
+								handler.logger.Error(err)
+								return err
+							}
+							entities = make([]*layers.Entity, 0)
+							return err
+						})
+					}
+					if err := g.Wait(); err != nil {
+						return err
+					}
+				}
+
 			}
 		}
-
 		return nil
 	})
 
@@ -87,11 +124,6 @@ func (handler *postHandler) postHandler(c echo.Context) error {
 			handler.logger.Error(err)
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 		}
-	}
-
-	if postLayer.PostRepo.DB != nil {
-		postLayer.PostRepo.DB.Close()
-		postLayer.PostRepo.DB = nil
 	}
 
 	return c.NoContent(200)
