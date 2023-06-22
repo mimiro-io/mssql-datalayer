@@ -209,19 +209,18 @@ func (postLayer *PostLayer) UpsertBulk(entities []*Entity, fields []*conf.FieldM
 		return fmt.Errorf("could not resolve datetime, error in creating stmt")
 	}
 	conn, err := postLayer.PostRepo.DB.Conn(postLayer.PostRepo.ctx)
-
+	if conn == nil {
+		return err
+	}
 	if err != nil {
-		conn.Close()
 		return err
 	}
 	err = conn.PingContext(postLayer.PostRepo.ctx)
 	if err != nil {
-		conn.Close()
 		return err
 	}
 	_, err = conn.ExecContext(postLayer.PostRepo.ctx, buildQuery)
 	if err != nil {
-		conn.Close()
 		return err
 	}
 	conn.Close()
