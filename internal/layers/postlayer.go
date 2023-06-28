@@ -210,6 +210,7 @@ func (postLayer *PostLayer) UpsertBulk(entities []*Entity, fields []*conf.FieldM
 	}
 	conn, err := postLayer.PostRepo.DB.Conn(postLayer.PostRepo.ctx)
 	if conn == nil {
+		postLayer.logger.Info("conn = nil")
 		return err
 	}
 	if err != nil {
@@ -217,13 +218,21 @@ func (postLayer *PostLayer) UpsertBulk(entities []*Entity, fields []*conf.FieldM
 	}
 	err = conn.PingContext(postLayer.PostRepo.ctx)
 	if err != nil {
+		postLayer.logger.Info("cannot ping")
 		return err
 	}
 	_, err = conn.ExecContext(postLayer.PostRepo.ctx, buildQuery)
 	if err != nil {
+		postLayer.logger.Info("cannot insert")
+
 		return err
 	}
-	conn.Close()
+	err = conn.Close()
+	if err != nil {
+		postLayer.logger.Info("cannot close conn")
+
+	}
+
 	return nil
 }
 

@@ -98,6 +98,7 @@ func (handler *postHandler) postHandler(c echo.Context) error {
 							err := postLayer.PostEntities(datasetName, entslice, entityContext)
 							if err != nil {
 								handler.logger.Error(err)
+								handler.logger.Info("should close handle?")
 								return err
 							}
 							entities = make([]*layers.Entity, 0)
