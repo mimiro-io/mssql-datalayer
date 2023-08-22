@@ -5,14 +5,15 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
-	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/mimiro-io/mssqldatalayer/internal/db"
-	"go.uber.org/fx"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 	_ "time/tzdata"
+
+	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/mimiro-io/mssqldatalayer/internal/db"
+	"go.uber.org/fx"
 
 	"github.com/google/uuid"
 	"github.com/mimiro-io/mssqldatalayer/internal/conf"
@@ -203,7 +204,13 @@ func (l *Layer) ChangeSet(request db.DatasetRequest, callBack func(*Entity)) err
 				callBack(entity)
 			}
 		}
+	}
 
+	// this error can occur if there is an issue during the call to rows.Next()
+	// we want to fail as not all data has been read
+	if err := rows.Err(); err != nil {
+		l.er(err)
+		return err
 	}
 
 	// only add continuation token if enabled or sinceColumn is set
@@ -213,11 +220,6 @@ func (l *Layer) ChangeSet(request db.DatasetRequest, callBack func(*Entity)) err
 		entity.Properties["token"] = since
 
 		callBack(entity)
-	}
-
-	if err := rows.Err(); err != nil {
-		l.er(err)
-		return nil // this is already at the end, we don't care about this error now
 	}
 
 	// clean it up
