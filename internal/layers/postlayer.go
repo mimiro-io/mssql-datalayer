@@ -5,6 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+	_ "time/tzdata"
+
 	_ "github.com/microsoft/go-mssqldb"
 	mssql "github.com/microsoft/go-mssqldb"
 	"github.com/mimiro-io/internal-go-util/pkg/uda"
@@ -12,12 +19,6 @@ import (
 	"github.com/spf13/cast"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	"log"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
-	_ "time/tzdata"
 )
 
 type PostLayer struct {
@@ -116,7 +117,6 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity,
 	} else {
 		return postLayer.CustomQuery(entities, query, fields, queryDel)
 	}
-	return nil
 }
 
 func (postLayer *PostLayer) CustomQuery(entities []*Entity, query string, fields []*conf.FieldMapping, queryDel string) error {

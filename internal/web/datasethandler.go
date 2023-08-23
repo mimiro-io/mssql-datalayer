@@ -3,14 +3,15 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/url"
+	"strconv"
+
 	"github.com/labstack/echo/v4"
 	"github.com/mimiro-io/mssqldatalayer/internal/db"
 	"github.com/mimiro-io/mssqldatalayer/internal/layers"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	"net/http"
-	"net/url"
-	"strconv"
 )
 
 type ServiceInfo struct {
@@ -165,18 +166,12 @@ func (handler *datasetHandler) getChangesHandler(c echo.Context) error {
 	})
 
 	if err != nil {
+		// dont write the closing bracket and imply to the client through this that the stream is broken
 		handler.logger.Warn(err)
+	} else {
+		c.Response().Write([]byte("]"))
+		c.Response().Flush()
 	}
 
-	/*entity := map[string]interface{}{
-		"id":    "@continuation",
-		"token": base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%o", time.Now().Unix()))),
-	}
-
-	c.Response().Write([]byte(","))
-	_ = enc.Encode(entity)*/
-	c.Response().Write([]byte("]"))
-	c.Response().Flush()
 	return nil
-
 }
