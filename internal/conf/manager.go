@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.uber.org/fx"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"go.uber.org/fx"
 
 	"github.com/mimiro-io/mssqldatalayer/internal/security"
 
@@ -118,7 +120,7 @@ func (conf *ConfigurationManager) load() {
 	if state.Digest != conf.State.Digest {
 		config, err := conf.parse(configContent)
 		if err != nil {
-			conf.logger.Warn("Unable to parse json into config. Error is: "+err.Error()+". Please check file: "+conf.configLocation, err)
+			conf.logger.Warnf("Unable to parse json into config. Error is: %v. Please check file: %v", err.Error(), conf.configLocation)
 			return
 		}
 
@@ -186,11 +188,11 @@ func (conf *ConfigurationManager) loadFile(location string) ([]byte, error) {
 
 	configFile, err := os.Open(configFileName)
 	if err != nil {
-		conf.logger.Error("Unable to open config file: "+configFileName, err)
+		conf.logger.Errorf("Unable to open config file: %v (%+v)", configFileName, err)
 		return nil, err
 	}
 	defer configFile.Close()
-	return ioutil.ReadAll(configFile)
+	return io.ReadAll(configFile)
 }
 
 func (conf *ConfigurationManager) parse(config []byte) (*Datalayer, error) {

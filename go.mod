@@ -1,6 +1,6 @@
 module github.com/mimiro-io/mssqldatalayer
 
-go 1.20
+go 1.21
 
 require (
 	github.com/DataDog/datadog-go/v5 v5.1.1
@@ -14,8 +14,11 @@ require (
 	github.com/juliangruber/go-intersect v1.1.0
 	github.com/labstack/echo/v4 v4.9.0
 	github.com/microsoft/go-mssqldb v0.21.0
+	github.com/mimiro-io/entity-graph-data-model v0.0.0-20230815130618-e923178d181d
 	github.com/mimiro-io/internal-go-util v0.0.0-20220621120333-ed6ba3a9996d
+	github.com/onsi/ginkgo/v2 v2.12.0
 	github.com/onsi/gomega v1.27.10
+	github.com/ory/dockertest/v3 v3.10.0
 	github.com/spf13/cast v1.5.0
 	github.com/spf13/viper v1.13.0
 	go.uber.org/fx v1.18.1
@@ -35,12 +38,14 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
+	github.com/go-logr/logr v1.2.4 // indirect
+	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/gojektech/valkyrie v0.0.0-20190210220504-8f62c1e7ba45 // indirect
 	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/google/pprof v0.0.0-20230821062121-407c9e7a662f // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
@@ -53,7 +58,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/opencontainers/runc v1.1.9 // indirect
-	github.com/ory/dockertest/v3 v3.10.0 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -81,7 +85,6 @@ require (
 	golang.org/x/text v0.12.0 // indirect
 	golang.org/x/time v0.0.0-20220920022843-2ce7c2934d45 // indirect
 	golang.org/x/tools v0.12.0 // indirect
-	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

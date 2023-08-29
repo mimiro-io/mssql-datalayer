@@ -10,8 +10,8 @@ import (
 	"github.com/mimiro-io/mssqldatalayer/internal/web"
 )
 
-func CreateLayer() *fx.App {
-	return fx.New(
+func CreateLayer(xtra ...fx.Option) *fx.App {
+	opts := []fx.Option{
 		fx.Provide(
 			mssqldatalayer.NewEnv,
 			conf.NewStatsd,
@@ -28,5 +28,7 @@ func CreateLayer() *fx.App {
 			web.NewDatasetHandler,
 			web.NewPostHandler,
 		),
-	)
+	}
+	opts = append(xtra, opts...)
+	return fx.New(opts...)
 }

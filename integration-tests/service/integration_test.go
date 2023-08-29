@@ -1,14 +1,20 @@
 package service
 
 import (
-	"fmt"
+	"context"
+	"net/http"
+	"os"
 	"testing"
-	"time"
 
+	egdm "github.com/mimiro-io/entity-graph-data-model"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/fx"
+
+	_ "github.com/microsoft/go-mssqldb"
 
 	"github.com/mimiro-io/mssqldatalayer/integration-tests"
+	"github.com/mimiro-io/mssqldatalayer/internal"
 )
 
 func TestLayer(t *testing.T) {
@@ -18,55 +24,54 @@ func TestLayer(t *testing.T) {
 
 var _ = Describe("IntegrationTests", Ordered, func() {
 	var (
-		srv     *integration_tests.TestService
-		err     error
-		counter float64
+		db    *integration.DockerDB
+		layer *fx.App
 	)
-	// Initialize our docker containers
-	// Pass all health checks
-	// Expect no errors
 	BeforeAll(func() {
-		srv, err = integration_tests.New()
-		counter = float64(15)
+		var err error
+		db, err = integration.New()
 		Expect(err).To(BeNil())
-		Expect(srv).NotTo(BeNil())
-	})
+		Expect(db).NotTo(BeNil())
+		DeferCleanup(db.Close)
 
-	// Cleanup our resoursec after all steps
-	AfterAll(func() {
-		err = srv.Close()
+		confLocation, err := db.TmpConfig()
 		Expect(err).To(BeNil())
+		DeferCleanup(os.Remove, confLocation)
+		_ = os.Setenv("SERVER_PORT", "12412")
+		_ = os.Setenv("CONFIG_LOCATION", "file://"+confLocation)
+		//_ = os.Setenv("CONFIG_REFRESH_INTERVAL", "@every 60s")
+		_ = os.Setenv("SERVICE_NAME", "datahub-mssql-datalayer")
+		_ = os.Setenv("MSSQL_DB_USER", "sa")
+		_ = os.Setenv("MSSQL_DB_PASSWORD", "Foobar123")
+		_ = os.Setenv("AUTHORIZATION_MIDDLEWARE", "noop")
+		layer = internal.CreateLayer(fx.NopLogger)
+		Expect(layer.Start(context.Background())).To(Succeed())
+		DeferCleanup(layer.Stop, context.Background())
 	})
 
-	Describe("put item to redis", func() {
-		Context("send POST request", func() {
-			It("should be a 200 OK response", func() {
-				body := []byte(fmt.Sprintf(`{ "counter": %v }`, counter))
-				// Use `localhost:8080` since we're outside of docker network
-				response, err := service.PostRequst("http://localhost:8080/item", body)
-				Expect(err).To(BeNil())
-				Expect(response).To(Equal(map[string]interface{}{"success": true}))
-			})
-		})
-	})
+	Describe("Get /changes", func() {
+		It("initial should be a 200 OK response", func() {
+			response, err := http.Get("http://localhost:12412/datasets/test/changes")
+			Expect(err).To(BeNil())
+			//b, _ := io.ReadAll(response.Body)
+			//println(string(b))
+			batch, err := egdm.NewEntityParser(egdm.NewNamespaceContext()).WithExpandURIs().LoadEntityCollection(response.Body)
+			Expect(err).To(BeNil())
+			Expect(batch.Continuation).NotTo(BeNil())
+			token := batch.Continuation.Token
+			Expect(token).NotTo(BeEmpty())
+			Expect(batch.GetEntities()).To(HaveLen(1))
 
-	Describe("get item from redis", func() {
-		Context("send GET request", func() {
-			It("should be a 200 OK response", func() {
-				response, err := service.GetRequst("http://localhost:8080/item")
-				Expect(err).To(BeNil())
-				Expect(response).To(Equal(map[string]interface{}{"counter": counter}))
-			})
-		})
-	})
+			Expect(db.Insert(2, "Name2")).To(Succeed())
 
-	Describe("get item from redis", func() {
-		Context("wait 15 seconds and send GET request", func() {
-			It("should be a 500 Internal Error response", func() {
-				time.Sleep(15 * time.Second)
-				_, err := service.GetRequst("http://localhost:8080/item")
-				Expect(err).NotTo(BeNil())
-			})
+			response, err = http.Get("http://localhost:12412/datasets/test/changes?since=" + token)
+			Expect(err).To(BeNil())
+			batch, err = egdm.NewEntityParser(egdm.NewNamespaceContext()).WithExpandURIs().LoadEntityCollection(response.Body)
+			Expect(err).To(BeNil())
+			Expect(batch.Continuation).NotTo(BeNil())
+			Expect(batch.Continuation.Token).NotTo(BeEmpty())
+			Expect(batch.Continuation.Token).NotTo(Equal(token))
+			Expect(batch.GetEntities()).To(HaveLen(1))
 		})
 	})
 })

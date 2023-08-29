@@ -5,10 +5,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mimiro-io/mssqldatalayer/internal/conf"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/mimiro-io/mssqldatalayer/internal/conf"
 )
 
 func NewEnv() *conf.Env {
@@ -62,8 +63,8 @@ func parseEnv(env string, logger *zap.SugaredLogger) {
 	viper.SetConfigName(".env")
 	err := viper.ReadInConfig() // Find and read the config file
 	if err != nil {             // Handle errors reading the config file
-		logger.DPanicf("Fatal error config file: %s", err)
-		panic(fmt.Errorf("Fatal error config file: %s \n", err))
+		logger.Infof("Fatal error config file: %s", err)
+		//panic(fmt.Errorf("Fatal error config file: %s \n", err))
 	}
 
 	logger.Infof("Reading config file %s", viper.GetViper().ConfigFileUsed())
@@ -71,7 +72,7 @@ func parseEnv(env string, logger *zap.SugaredLogger) {
 	viper.SetConfigName(fmt.Sprintf(".env-%s", env))
 	err = viper.MergeInConfig()
 	if err != nil {
-		logger.Warnf("Could not find .env-%s", env)
+		logger.Infof("Could not find .env-%s", env)
 	} else {
 		logger.Infof("Reading config file %s", viper.GetViper().ConfigFileUsed())
 	}
