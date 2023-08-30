@@ -158,13 +158,6 @@ func (s DockerDB) Insert(id int, name string) error {
 		return err
 	}
 	defer func() { _ = db.Close() }()
-	//
-	//ctx := context.Background()
-	//conn, err := db.Conn(ctx)
-	//if err != nil {
-	//	return err
-	//}
-	//defer func() { _ = conn.Close() }()
 
 	stmt := fmt.Sprintf(`INSERT INTO test.test (Id, Name) VALUES ('%v', '%v');`, id, name)
 	_, err = db.Exec(stmt)
@@ -172,4 +165,31 @@ func (s DockerDB) Insert(id int, name string) error {
 		return err
 	}
 	return nil
+}
+
+func (s DockerDB) WaitForCdc(id int, expectedTotalChanges int) error {
+	db, err := sql.Open("sqlserver", strings.ReplaceAll(s.connectStr, "master", "test"))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+
+	var cnt int
+	start := time.Now()
+	for {
+		time.Sleep(100 * time.Millisecond)
+		stmt := fmt.Sprintf(`SELECT COUNT(*) as changes FROM cdc.test_test_CT where id = '%d'`, id)
+		row := db.QueryRow(stmt)
+		err = row.Scan(&cnt)
+		if err != nil {
+			return err
+		}
+		if cnt == expectedTotalChanges {
+			fmt.Printf("got expected changes after %v\n\n", time.Since(start))
+			return nil
+		}
+		if time.Since(start) > 10*time.Second {
+			return fmt.Errorf("timeout waiting for CDC changes. expected %d changes for is %d, got %d", expectedTotalChanges, id, cnt)
+		}
+	}
 }

@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	egdm "github.com/mimiro-io/entity-graph-data-model"
 	. "github.com/onsi/ginkgo/v2"
@@ -62,16 +65,53 @@ var _ = Describe("IntegrationTests", Ordered, func() {
 			Expect(token).NotTo(BeEmpty())
 			Expect(batch.GetEntities()).To(HaveLen(1))
 
+			// insert new entity
 			Expect(db.Insert(2, "Name2")).To(Succeed())
 
+			// wait for start of next second
+			nxtSecond()
+
+			//logToken(token)
+			// try to get changes immediately, should be empty since cdc is lagging
 			response, err = http.Get("http://localhost:12412/datasets/test/changes?since=" + token)
 			Expect(err).To(BeNil())
 			batch, err = egdm.NewEntityParser(egdm.NewNamespaceContext()).WithExpandURIs().LoadEntityCollection(response.Body)
 			Expect(err).To(BeNil())
 			Expect(batch.Continuation).NotTo(BeNil())
-			Expect(batch.Continuation.Token).NotTo(BeEmpty())
-			Expect(batch.Continuation.Token).NotTo(Equal(token))
+			token = batch.Continuation.Token
+			Expect(token).NotTo(BeEmpty())
+			Expect(batch.GetEntities()).To(HaveLen(0))
+
+			// wait for cdc to catch up, there should soon be 1 total change for id 2
+			Expect(db.WaitForCdc(2, 1)).To(Succeed())
+
+			//logToken(token)
+			// now, there should be 1 change
+			response, err = http.Get("http://localhost:12412/datasets/test/changes?since=" + token)
+			Expect(err).To(BeNil())
+			batch, err = egdm.NewEntityParser(egdm.NewNamespaceContext()).WithExpandURIs().LoadEntityCollection(response.Body)
+			Expect(err).To(BeNil())
+			Expect(batch.Continuation).NotTo(BeNil())
+			nexttoken := batch.Continuation.Token
+			Expect(nexttoken).NotTo(BeEmpty())
 			Expect(batch.GetEntities()).To(HaveLen(1))
+			Expect(batch.GetEntities()[0].Properties["test/Name"]).To(Equal("Name2"))
+			Expect(nexttoken).NotTo(Equal(token))
 		})
 	})
 })
+
+func logToken(token string) {
+	dec, err := base64.StdEncoding.DecodeString(token)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("\n\ntoken: ", string(dec), " time now", time.Now())
+}
+
+func nxtSecond() {
+	t := time.Now()
+	nextSec := t.Add(1 * time.Second).Round(time.Second)
+	tts := nextSec.Sub(t)
+	time.Sleep(tts) // new cdc timeframe
+}
