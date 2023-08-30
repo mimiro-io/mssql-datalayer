@@ -106,10 +106,6 @@ func (q CDCQuery) BuildQuery() string {
 	if err == nil && strings.HasPrefix(string(data), "0x") && len(data) == 22 {
 		lastLsn = fmt.Sprintf("CONVERT(binary(10), %s)", string(data))
 	}
-	//query := fmt.Sprintf(`
-	//	SELECT t.* FROM [cdc].[%s_%s_CT] AS t
-	//	           WHERE t.__$start_lsn > CONVERT(binary(10), %s)
-	//	`, schema, q.TableDef.TableName, string(data))
 
 	query := fmt.Sprintf(`
 		DECLARE @from_lsn binary(10), @to_lsn binary(10), @last_lsn binary(10);
@@ -118,6 +114,5 @@ func (q CDCQuery) BuildQuery() string {
 		SET @to_lsn = sys.fn_cdc_get_max_lsn();
 		SELECT * from cdc.fn_cdc_get_all_changes_%s_%s ( @from_lsn, @to_lsn, 'all' );
 `, lastLsn, schema, q.TableDef.TableName)
-	//println(query)
 	return query
 }

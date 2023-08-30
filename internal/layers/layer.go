@@ -459,12 +459,6 @@ func getSince(db *sql.DB, tableDef *conf.TableMapping) (string, error) {
 		}
 		s = fmt.Sprintf("%s", dt.Format("2006-01-02T15:04:05.000Z"))
 	} else if tableDef.CDCEnabled {
-		//schema := "dbo"
-		//if tableDef.Config != nil && tableDef.Config.Schema != nil {
-		//	schema = *tableDef.Config.Schema
-		//}
-		//query := fmt.Sprintf(`SELECT max(t.__$start_lsn) FROM [cdc].[%s_%s_CT] AS t;`,
-		//	schema, tableDef.TableName)
 		query := "select sys.fn_cdc_get_max_lsn();"
 		row := db.QueryRow(query)
 		var bytes []byte
