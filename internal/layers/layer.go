@@ -12,12 +12,14 @@ import (
 	_ "time/tzdata"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/mimiro-io/mssqldatalayer/internal/db"
 	"go.uber.org/fx"
 
+	"github.com/mimiro-io/mssqldatalayer/internal/db"
+
 	"github.com/google/uuid"
-	"github.com/mimiro-io/mssqldatalayer/internal/conf"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/mssqldatalayer/internal/conf"
 )
 
 type Layer struct {
@@ -440,6 +442,23 @@ func getSince(db *sql.DB, tableDef *conf.TableMapping) (string, error) {
 			return "", err
 		}
 		s = fmt.Sprintf("%s", dt.Format("2006-01-02T15:04:05.000Z"))
+	} else if tableDef.CDCEnabled {
+		//schema := "dbo"
+		//if tableDef.Config != nil && tableDef.Config.Schema != nil {
+		//	schema = *tableDef.Config.Schema
+		//}
+		//query := fmt.Sprintf(`SELECT max(t.__$start_lsn) FROM [cdc].[%s_%s_CT] AS t;`,
+		//	schema, tableDef.TableName)
+		query := "select sys.fn_cdc_get_max_lsn();"
+		row := db.QueryRow(query)
+		var bytes []byte
+		err := row.Scan(&bytes)
+		if err != nil {
+			return "", err
+		}
+		hexString := fmt.Sprintf("0x%x", bytes)
+		res := base64.RawURLEncoding.EncodeToString([]byte(hexString))
+		return res, nil
 	} else {
 		var dt time.Time
 		row := db.QueryRow("SELECT GETDATE()")

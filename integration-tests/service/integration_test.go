@@ -54,6 +54,7 @@ var _ = Describe("IntegrationTests", Ordered, func() {
 
 	Describe("Get /changes", func() {
 		It("initial should be a 200 OK response", func() {
+			Expect(db.WaitForCdc(1, 1)).To(Succeed())
 			response, err := http.Get("http://localhost:12412/datasets/test/changes")
 			Expect(err).To(BeNil())
 			//b, _ := io.ReadAll(response.Body)

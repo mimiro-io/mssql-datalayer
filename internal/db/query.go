@@ -96,24 +96,18 @@ type CDCQuery struct {
 }
 
 func (q CDCQuery) BuildQuery() string {
-	date := "GETDATE()-1"
-	data, err := base64.StdEncoding.DecodeString(q.Request.Since)
-	if err == nil {
-		dt, _ := time.Parse(time.RFC3339, string(data))
-		date = fmt.Sprintf("DATETIMEFROMPARTS( %d, %d, %d, %d, %d, %d, 0)",
-			dt.Year(), dt.Month(), dt.Day(), dt.Hour(), dt.Minute(), dt.Second())
+	data, err := base64.RawURLEncoding.DecodeString(q.Request.Since)
+	if err != nil {
+		data = []byte("0x00000000000000000000")
 	}
 	schema := "dbo"
 	if q.TableDef.Config != nil && q.TableDef.Config.Schema != nil {
 		schema = *q.TableDef.Config.Schema
 	}
 	query := fmt.Sprintf(`
-		DECLARE @begin_time DATETIME, @end_time DATETIME, @begin_lsn BINARY(10), @end_lsn BINARY(10);
-		SELECT @begin_time = %s, @end_time = GETDATE();
-		SELECT @begin_lsn = sys.fn_cdc_map_time_to_lsn('smallest greater than', @begin_time);
-		SELECT @end_lsn = sys.fn_cdc_map_time_to_lsn('largest less than or equal', @end_time);
-		SELECT t.* FROM [cdc].[%s_%s_CT] AS t WHERE (t.__$start_lsn <= @end_lsn) AND (t.__$start_lsn >= @begin_lsn);
-		`, date, schema, q.TableDef.TableName)
+		SELECT t.* FROM [cdc].[%s_%s_CT] AS t 
+		           WHERE t.__$start_lsn > CONVERT(binary(10), %s)
+		`, schema, q.TableDef.TableName, string(data))
 
 	return query
 }
