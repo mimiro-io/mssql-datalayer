@@ -96,18 +96,28 @@ type CDCQuery struct {
 }
 
 func (q CDCQuery) BuildQuery() string {
-	data, err := base64.RawURLEncoding.DecodeString(q.Request.Since)
-	if err != nil {
-		data = []byte("0x00000000000000000000")
-	}
 	schema := "dbo"
 	if q.TableDef.Config != nil && q.TableDef.Config.Schema != nil {
 		schema = *q.TableDef.Config.Schema
 	}
-	query := fmt.Sprintf(`
-		SELECT t.* FROM [cdc].[%s_%s_CT] AS t 
-		           WHERE t.__$start_lsn > CONVERT(binary(10), %s)
-		`, schema, q.TableDef.TableName, string(data))
 
+	lastLsn := fmt.Sprintf("sys.fn_cdc_get_min_lsn('%s_%s')", schema, q.TableDef.TableName)
+	data, err := base64.RawURLEncoding.DecodeString(q.Request.Since)
+	if err == nil && strings.HasPrefix(string(data), "0x") && len(data) == 22 {
+		lastLsn = fmt.Sprintf("CONVERT(binary(10), %s)", string(data))
+	}
+	//query := fmt.Sprintf(`
+	//	SELECT t.* FROM [cdc].[%s_%s_CT] AS t
+	//	           WHERE t.__$start_lsn > CONVERT(binary(10), %s)
+	//	`, schema, q.TableDef.TableName, string(data))
+
+	query := fmt.Sprintf(`
+		DECLARE @from_lsn binary(10), @to_lsn binary(10), @last_lsn binary(10);
+		SET @last_lsn = %s;
+		SET @from_lsn = sys.fn_cdc_increment_lsn(@last_lsn);
+		SET @to_lsn = sys.fn_cdc_get_max_lsn();
+		SELECT * from cdc.fn_cdc_get_all_changes_%s_%s ( @from_lsn, @to_lsn, 'all' );
+`, lastLsn, schema, q.TableDef.TableName)
+	//println(query)
 	return query
 }
