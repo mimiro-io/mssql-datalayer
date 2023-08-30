@@ -12,12 +12,15 @@ import (
 	_ "time/tzdata"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/mimiro-io/mssqldatalayer/internal/db"
+	mssql "github.com/microsoft/go-mssqldb"
 	"go.uber.org/fx"
 
+	"github.com/mimiro-io/mssqldatalayer/internal/db"
+
 	"github.com/google/uuid"
-	"github.com/mimiro-io/mssqldatalayer/internal/conf"
 	"go.uber.org/zap"
+
+	"github.com/mimiro-io/mssqldatalayer/internal/conf"
 )
 
 type Layer struct {
@@ -209,8 +212,23 @@ func (l *Layer) ChangeSet(request db.DatasetRequest, callBack func(*Entity)) err
 	// this error can occur if there is an issue during the call to rows.Next()
 	// we want to fail as not all data has been read
 	if err := rows.Err(); err != nil {
-		l.er(err)
-		return err
+		skipErr := false
+		if driverErr, ok := err.(mssql.Error); ok { // Now the error number is accessible directly
+			if driverErr.Number == 313 {
+				// 313 is the error number for "lsn range exceeded. in our case that means the provided start lsn is at the end of the change set"
+				// in this case, we just want to build an empty result with unaltered continuation token
+				// https://learn.microsoft.com/en-us/sql/relational-databases/system-functions/sys-fn-cdc-increment-lsn-transact-sql?view=sql-server-ver16#examples
+				err = fmt.Errorf("token still at end of change set, (%w)", err)
+				skipErr = true
+			}
+		}
+		if !skipErr {
+			l.er(err)
+			return err
+		} else {
+			l.logger.Info("ignoring error and not updating token: ", err.Error())
+			since = request.Since
+		}
 	}
 
 	// only add continuation token if enabled or sinceColumn is set
@@ -440,6 +458,17 @@ func getSince(db *sql.DB, tableDef *conf.TableMapping) (string, error) {
 			return "", err
 		}
 		s = fmt.Sprintf("%s", dt.Format("2006-01-02T15:04:05.000Z"))
+	} else if tableDef.CDCEnabled {
+		query := "select sys.fn_cdc_get_max_lsn();"
+		row := db.QueryRow(query)
+		var bytes []byte
+		err := row.Scan(&bytes)
+		if err != nil {
+			return "", err
+		}
+		hexString := fmt.Sprintf("0x%x", bytes)
+		res := base64.RawURLEncoding.EncodeToString([]byte(hexString))
+		return res, nil
 	} else {
 		var dt time.Time
 		row := db.QueryRow("SELECT GETDATE()")

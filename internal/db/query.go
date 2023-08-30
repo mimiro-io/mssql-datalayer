@@ -3,9 +3,10 @@ package db
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/mimiro-io/mssqldatalayer/internal/conf"
 	"strings"
 	"time"
+
+	"github.com/mimiro-io/mssqldatalayer/internal/conf"
 )
 
 type DatasetRequest struct {
@@ -95,21 +96,23 @@ type CDCQuery struct {
 }
 
 func (q CDCQuery) BuildQuery() string {
-	date := "GETDATE()-1"
-	data, err := base64.StdEncoding.DecodeString(q.Request.Since)
-	if err == nil {
-		dt, _ := time.Parse(time.RFC3339, string(data))
-		date = fmt.Sprintf("DATETIMEFROMPARTS( %d, %d, %d, %d, %d, %d, 0)",
-			dt.Year(), dt.Month(), dt.Day(), dt.Hour(), dt.Minute(), dt.Second())
+	schema := "dbo"
+	if q.TableDef.Config != nil && q.TableDef.Config.Schema != nil {
+		schema = *q.TableDef.Config.Schema
+	}
+
+	lastLsn := fmt.Sprintf("sys.fn_cdc_get_min_lsn('%s_%s')", schema, q.TableDef.TableName)
+	data, err := base64.RawURLEncoding.DecodeString(q.Request.Since)
+	if err == nil && strings.HasPrefix(string(data), "0x") && len(data) == 22 {
+		lastLsn = fmt.Sprintf("CONVERT(binary(10), %s)", string(data))
 	}
 
 	query := fmt.Sprintf(`
-		DECLARE @begin_time DATETIME, @end_time DATETIME, @begin_lsn BINARY(10), @end_lsn BINARY(10);
-		SELECT @begin_time = %s, @end_time = GETDATE();
-		SELECT @begin_lsn = sys.fn_cdc_map_time_to_lsn('smallest greater than', @begin_time);
-		SELECT @end_lsn = sys.fn_cdc_map_time_to_lsn('largest less than or equal', @end_time);
-		SELECT t.* FROM [cdc].[dbo_%s_CT] AS t WHERE (t.__$start_lsn <= @end_lsn) AND (t.__$start_lsn >= @begin_lsn);
-		`, date, q.TableDef.TableName)
-
+		DECLARE @from_lsn binary(10), @to_lsn binary(10), @last_lsn binary(10);
+		SET @last_lsn = %s;
+		SET @from_lsn = sys.fn_cdc_increment_lsn(@last_lsn);
+		SET @to_lsn = sys.fn_cdc_get_max_lsn();
+		SELECT * from cdc.fn_cdc_get_all_changes_%s_%s ( @from_lsn, @to_lsn, 'all' );
+`, lastLsn, schema, q.TableDef.TableName)
 	return query
 }
