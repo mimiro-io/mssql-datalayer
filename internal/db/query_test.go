@@ -3,12 +3,14 @@ package db
 import (
 	"encoding/base64"
 	"fmt"
-	goblin "github.com/franela/goblin"
-	"github.com/mimiro-io/mssqldatalayer/internal/conf"
-	. "github.com/onsi/gomega"
 	"strings"
 	"testing"
 	"time"
+
+	goblin "github.com/franela/goblin"
+	. "github.com/onsi/gomega"
+
+	"github.com/mimiro-io/mssqldatalayer/internal/conf"
 )
 
 func TestNewQueryWithFullQuery(t *testing.T) {
@@ -82,7 +84,7 @@ func TestNewQuery_WithCDC(t *testing.T) {
 			query := NewQuery(DatasetRequest{Since: token}, layer.TableMappings[0], layer)
 			Expect(query).Should(BeAssignableToTypeOf(CDCQuery{}))
 
-			g.Assert(strings.Contains(query.BuildQuery(), "SELECT t.* FROM [cdc].[dbo_Table1_CT]")).IsTrue()
+			g.Assert(strings.Contains(query.BuildQuery(), "SELECT * from cdc.fn_cdc_get_all_changes_dbo_Table1")).IsTrue()
 		})
 	})
 
