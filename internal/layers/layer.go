@@ -192,8 +192,10 @@ func (l *Layer) ChangeSet(request db.DatasetRequest, callBack func(*Entity)) err
 		} else {
 			// map it
 			_ = l.statsd.Incr("mssql.read", tags, 1)
-			entity := l.toEntity(nullableRowData, cols, colTypes, tableDef)
-
+			entity, err := l.toEntity(nullableRowData, cols, colTypes, tableDef)
+			if err != nil {
+				return err
+			}
 			if entity != nil {
 				// add types to entity
 				if len(tableDef.Types) == 1 {
@@ -307,9 +309,9 @@ func (l *Layer) connect(table *conf.TableMapping) (*sql.DB, error) {
 	return db, nil
 }
 
-func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.ColumnType, tableDef *conf.TableMapping) *Entity {
+func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.ColumnType, tableDef *conf.TableMapping) (*Entity, error) {
 	entity := NewEntity()
-
+	log := l.logger.With("table", tableDef.TableName)
 	for i, raw := range rowType {
 		if raw != nil {
 			ct := colTypes[i]
@@ -372,21 +374,21 @@ func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.C
 					if tableDef.TimeZone != "" {
 						location, err = time.LoadLocation(tableDef.TimeZone)
 						if err != nil {
-							l.logger.Errorf("Error parsing TimeZone from table definition: %s", err)
-							return nil
+							log.Errorf("Error parsing TimeZone from table definition: %s", err)
+							return nil, err
 						}
 					} else if l.cmgr.Datalayer.TimeZone != "" {
 						location, err = time.LoadLocation(l.cmgr.Datalayer.TimeZone)
 						if err != nil {
-							l.logger.Errorf("Error parsing TimeZone from db definition: %s", err)
-							return nil
+							log.Errorf("Error parsing TimeZone from db definition: %s", err)
+							return nil, err
 						}
 					} else {
 						location, _ = time.LoadLocation("UTC")
 					}
 					val, err = time.ParseInLocation("2006-01-02T15:04:05Z", val.(time.Time).Format(time.RFC3339), location)
 					if err != nil {
-						l.logger.Errorf("Error parsing timestamp: %s", val)
+						log.Errorf("Error parsing timestamp: %s", val)
 					}
 					entity.Properties[colName] = val.(time.Time).Format(time.RFC3339Nano)
 				}
@@ -402,7 +404,7 @@ func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.C
 				if *ptrToSomething != nil {
 					val, err := toInt64(*ptrToSomething)
 					if err != nil {
-						l.logger.Warnf("Error converting to int64: %v", err)
+						log.Warnf("Error converting to int64: %v", err)
 					} else {
 						strVal = strconv.FormatInt(val, 10)
 						entity.Properties[colName] = val
@@ -421,7 +423,7 @@ func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.C
 					entity.Properties[colName] = false // default to false
 				}
 			default:
-				l.logger.Errorf("Got: %s for %s", ctName, colName)
+				log.Errorf("Got: %s for %s", ctName, colName)
 			}
 
 			if colMapping != nil {
@@ -438,11 +440,11 @@ func (l *Layer) toEntity(rowType []interface{}, cols []string, colTypes []*sql.C
 	}
 
 	if entity.ID == "" { // this is invalid
-		l.logger.Warnf("Oooh, I got an empty id value from the database, this is probably pretty wrong. CDC access?")
-		return nil
+		log.Errorf("empty id value from the database, this is probably pretty wrong. CDC access? entity: %+v", entity)
+		return nil, fmt.Errorf("empty id value from the database. CDC access?")
 	}
 
-	return entity
+	return entity, nil
 }
 
 // serverSince queries the server for its time, this will be used as the source of the since to return
