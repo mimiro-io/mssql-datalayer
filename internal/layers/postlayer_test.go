@@ -1,14 +1,14 @@
-package layers_test
+package layers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"testing"
+
 	"github.com/franela/goblin"
 	"github.com/mimiro-io/mssqldatalayer/internal/conf"
-	"github.com/mimiro-io/mssqldatalayer/internal/layers"
-	"os"
-	"strings"
-	"testing"
 )
 
 func TestUpsertBulk(t *testing.T) {
@@ -23,9 +23,7 @@ func TestUpsertBulk(t *testing.T) {
 			if err := json.Unmarshal(postM, &datalayer); err != nil {
 				fmt.Print(err)
 			}
-			pl := &layers.PostLayer{
-				PostRepo: &layers.PostRepository{},
-			}
+			pl := &PostLayer{PostRepo: &PostRepository{}}
 
 			pl.PostRepo.PostTableDef = datalayer.PostMappings[0]
 			// Do checks so that we read all properties from postmappings correctly
@@ -38,7 +36,7 @@ func TestUpsertBulk(t *testing.T) {
 			g.Assert(pl.PostRepo.PostTableDef.NullEmptyColumnValues).IsFalse()
 			g.Assert(pl.PostRepo.PostTableDef.Query).Eql("upsertBulk")
 		})
-		g.It("Should create a sql-statement with upsertBulk", func() {
+		g.It("Should build parameterised insert statements for upsertBulk", func() {
 			postM, err := os.ReadFile("../../resources/test/test-upsertbulk.json")
 			if err != nil {
 				fmt.Print(err)
@@ -51,29 +49,18 @@ func TestUpsertBulk(t *testing.T) {
 			if err != nil {
 				fmt.Print(err)
 			}
-			var entities []*layers.Entity
+			var entities []*Entity
 			if err := json.Unmarshal(file, &entities); err != nil {
 				fmt.Println(err)
 			}
-			pl := &layers.PostLayer{
-				PostRepo: &layers.PostRepository{},
-			}
+			pl := &PostLayer{PostRepo: &PostRepository{}}
 			pl.PostRepo.PostTableDef = datalayer.PostMappings[0]
-			query := (*layers.PostLayer).CreateUpsertBulk(pl, entities, pl.PostRepo.PostTableDef.FieldMappings, "DELETE FROM test WHERE Id = ", "Id", "Europe/Oslo", "test")
-			g.Assert(query).Eql("DELETE FROM test WHERE Id = 'a:1';DELETE FROM test WHERE Id = 'a:2';DELETE FROM test WHERE Id = 'a:3';INSERT INTO test (Id, Column_Int, Column_Tinyint, Column_Smallint, Column_Bit, Column_Float, Column_Datetime, Column_Datetime2, Column_DatetimeOffset, Column_Varchar, Column_Decimal, Column_Numeric, Column_Date ) VALUES ( 'a:3',12344556,13,41,0,7.990000,'2023-01-01T01:01:01','2023-01-01T00:01:01','2023-01-01T01:01:01+02:00','b:string',90.090000,211.110000,'2023-01-01' );DELETE FROM test WHERE Id = 'a:4';INSERT INTO test (Id, Column_Int, Column_Tinyint, Column_Smallint, Column_Bit, Column_Float, Column_Varchar, Column_Decimal, Column_Numeric ) VALUES ( 'a:4',12344556,13,41,0,7.990000,'b:string',90.090000,211.110000 );")
-			resultSlice := strings.Split(query, ";")
-
-			g.Assert(resultSlice).IsNotNil()
-			g.Assert(len(resultSlice)).Eql(7)
-			g.Assert(resultSlice[0]).Eql("DELETE FROM test WHERE Id = 'a:1'")
-			g.Assert(resultSlice[1]).Eql("DELETE FROM test WHERE Id = 'a:2'")
-			g.Assert(resultSlice[2]).Eql("DELETE FROM test WHERE Id = 'a:3'")
-			g.Assert(resultSlice[3]).Eql("INSERT INTO test (Id, Column_Int, Column_Tinyint, Column_Smallint, Column_Bit, Column_Float, Column_Datetime, Column_Datetime2, Column_DatetimeOffset, Column_Varchar, Column_Decimal, Column_Numeric, Column_Date ) VALUES ( 'a:3',12344556,13,41,0,7.990000,'2023-01-01T01:01:01','2023-01-01T00:01:01','2023-01-01T01:01:01+02:00','b:string',90.090000,211.110000,'2023-01-01' )")
-			g.Assert(resultSlice[4]).Eql("DELETE FROM test WHERE Id = 'a:4'")
-			g.Assert(resultSlice[5]).Eql("INSERT INTO test (Id, Column_Int, Column_Tinyint, Column_Smallint, Column_Bit, Column_Float, Column_Varchar, Column_Decimal, Column_Numeric ) VALUES ( 'a:4',12344556,13,41,0,7.990000,'b:string',90.090000,211.110000 )")
-
+			stmt, args, err := pl.buildInsertStatement(pl.PostRepo.PostTableDef.TableName, pl.PostRepo.PostTableDef.FieldMappings, entities[3].StripProps())
+			g.Assert(err).IsNil()
+			g.Assert(stmt).Eql("INSERT INTO test (Id, Column_Int, Column_Tinyint, Column_Smallint, Column_Bit, Column_Float, Column_Datetime, Column_Datetime2, Column_DatetimeOffset, Column_Varchar, Column_Decimal, Column_Numeric, Column_Date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			g.Assert(len(args)).Eql(13)
 		})
-		g.It("Should create user defined statement", func() {
+		g.It("Should prepare named arguments for custom queries", func() {
 			postM, err := os.ReadFile("../../resources/test/test-customquery.json")
 			if err != nil {
 				fmt.Print(err)
@@ -86,25 +73,22 @@ func TestUpsertBulk(t *testing.T) {
 			if err != nil {
 				fmt.Print(err)
 			}
-			var entities []*layers.Entity
+			var entities []*Entity
 			if err := json.Unmarshal(file, &entities); err != nil {
 				fmt.Println(err)
 			}
-			pl := &layers.PostLayer{
-				PostRepo: &layers.PostRepository{},
-			}
+			pl := &PostLayer{PostRepo: &PostRepository{}}
 			pl.PostRepo.PostTableDef = datalayer.PostMappings[0]
-			s1 := entities[1].StripProps()
-			s2 := entities[2].StripProps()
-			s3 := entities[3].StripProps()
+			values, err := pl.columnValuesFromProps(entities[3].StripProps(), pl.PostRepo.PostTableDef.FieldMappings)
+			g.Assert(err).IsNil()
 
-			delTest1 := (*layers.PostLayer).CustomDelete(pl, entities[1], pl.PostRepo.PostTableDef.FieldMappings, s1, "", "", "DELETE FROM test WHERE Id = ")
-			delTest2 := (*layers.PostLayer).CustomDelete(pl, entities[2], pl.PostRepo.PostTableDef.FieldMappings, s2, "", "", "DELETE FROM test WHERE Id = ")
-			delTest3 := (*layers.PostLayer).CustomDelete(pl, entities[3], pl.PostRepo.PostTableDef.FieldMappings, s3, "", "", "DELETE FROM test WHERE Id = ")
-			g.Assert(delTest1).Eql("DELETE FROM test WHERE Id = 'a:1';")
-			g.Assert(delTest2).Eql("DELETE FROM test WHERE Id = 'a:2';")
-			g.Assert(delTest3).Eql("DELETE FROM test WHERE Id = 'a:3';")
-			//DELETE FROM test WHERE Id = 'a:2';DELETE FROM test WHERE Id = 'a:3';INSERT INTO test (Id, Column_Int, Column_Tinyint, Column_Smallint, Column_Bit, Column_Float, Column_Datetime, Column_Datetime2, Column_DatetimeOffset, Column_Varchar, Column_Decimal, Column_Numeric, Column_Date ) VALUES ( 'a:3',12344556,13,41,0,7.990000,'2023-01-01T01:01:01','2023-01-01T00:01:01','2023-01-01T01:01:01+02:00','b:string',90.090000,211.110000,'2023-01-01' );")
+			args, err := prepareArguments(pl.PostRepo.PostTableDef.Query, values)
+			g.Assert(err).IsNil()
+			expectedParams := parameterPattern.FindAllStringSubmatch(pl.PostRepo.PostTableDef.Query, -1)
+			g.Assert(len(args)).Eql(len(expectedParams))
+
+			named := args[0].(sql.NamedArg)
+			g.Assert(named.Name).Eql("pId")
 		})
 	})
 }
