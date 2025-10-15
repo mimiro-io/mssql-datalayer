@@ -33,7 +33,9 @@ var _ = Describe("IntegrationTests", Ordered, func() {
 	BeforeAll(func() {
 		var err error
 		db, err = integration.New()
-		Expect(err).To(BeNil())
+		if err != nil {
+			Skip(fmt.Sprintf("skipping integration tests because docker is not available: %v", err))
+		}
 		Expect(db).NotTo(BeNil())
 		DeferCleanup(db.Close)
 

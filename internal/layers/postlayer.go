@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,6 +20,17 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
+
+var parameterPattern = regexp.MustCompile(`@([A-Za-z0-9_]+)`)
+
+type sqlExecer interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}
+
+type columnValue struct {
+	field *conf.FieldMapping
+	value interface{}
+}
 
 type PostLayer struct {
 	Cmgr     *conf.ConfigurationManager //
@@ -76,7 +87,7 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity,
 		return errors.New(fmt.Sprintf("No configuration found for dataset: %s", datasetName))
 	}
 	postLayer.PostRepo.PostTableDef = postLayer.GetTableDefinition(datasetName)
-	idColumn, timeZone, tableName, query, fields := postLayer.setVars()
+	idColumn, _, tableName, query, fields := postLayer.setVars()
 	postLayer.PostRepo.EntityContext = entityContext
 
 	if postLayer.PostRepo.DB == nil {
@@ -91,7 +102,7 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity,
 		postLayer.logger.Errorf("Please add query in config for %s in ", datasetName)
 		return errors.New(fmt.Sprintf("no query found in config for dataset: %s", datasetName))
 	}
-	queryDel := fmt.Sprintf(`DELETE FROM %s WHERE %s =`, tableName, idColumn)
+	queryDel := fmt.Sprintf(`DELETE FROM %s WHERE %s = ?`, tableName, idColumn)
 
 	if len(fields) == 0 {
 		postLayer.logger.Errorf("Please define all fields in config that is involved in dataset %s and query: %s", datasetName, query)
@@ -113,315 +124,319 @@ func (postLayer *PostLayer) PostEntities(datasetName string, entities []*Entity,
 		})
 	}
 	if query == "upsertBulk" {
-		return postLayer.UpsertBulk(entities, fields, queryDel, idColumn, timeZone, tableName)
+		return postLayer.UpsertBulk(entities, fields, queryDel, idColumn, tableName)
 	} else {
 		return postLayer.CustomQuery(entities, query, fields, queryDel)
 	}
 }
 
-func (postLayer *PostLayer) CustomQuery(entities []*Entity, query string, fields []*conf.FieldMapping, queryDel string) error {
-	// TODO: Re-write to use mssql.CopyIn since query is defined from user.
-	delQueue := ""
-	for _, post := range entities {
-		rowId := ""
+func (postLayer *PostLayer) CustomQuery(entities []*Entity, query string, fields []*conf.FieldMapping, deleteStmt string) error {
+	idField := postLayer.lookupIDField(fields)
+	if idField == nil {
+		return fmt.Errorf("id column %s not present in field mappings", postLayer.PostRepo.PostTableDef.IdColumn)
+	}
 
-		s := post.StripProps()
+	for _, post := range entities {
 		if !strings.ContainsAny(post.ID, ":") {
 			continue
 		}
-		timeZone := postLayer.PostRepo.PostTableDef.TimeZone
-		// put deleted in to own queue that fires at the end of batch.
+
+		props := post.StripProps()
+
 		if post.IsDeleted {
-			delQueue += postLayer.CustomDelete(post, fields, s, rowId, timeZone, queryDel)
-		} else {
-			payloadValues := postLayer.CreatePayload(post, fields)
-			postLayer.logger.Debug(payloadValues)
-			_, err := postLayer.PostRepo.DB.Exec(query, payloadValues...)
-			if err != nil {
-				postLayer.logger.Error(err)
+			if err := postLayer.execDelete(postLayer.PostRepo.DB, deleteStmt, idField, props); err != nil {
 				return err
 			}
+			continue
+		}
 
+		payload, err := postLayer.columnValuesFromProps(props, fields)
+		if err != nil {
+			return err
+		}
+
+		args, err := prepareArguments(query, payload)
+		if err != nil {
+			return err
+		}
+
+		_, err = postLayer.PostRepo.DB.ExecContext(postLayer.PostRepo.ctx, query, args...)
+		if err != nil {
+			postLayer.logger.Error(err)
+			return err
 		}
 	}
-	_, err := postLayer.PostRepo.DB.Exec(delQueue)
+
+	return nil
+}
+
+func (postLayer *PostLayer) UpsertBulk(entities []*Entity, fields []*conf.FieldMapping, deleteStmt string, idColumn string, tableName string) error {
+	idField := postLayer.lookupIDField(fields)
+	if idField == nil {
+		return fmt.Errorf("id column %s not present in field mappings", idColumn)
+	}
+
+	tx, err := postLayer.PostRepo.DB.BeginTx(postLayer.PostRepo.ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	rollback := func(err error) error {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			postLayer.logger.Warnf("rollback failed: %v", rbErr)
+		}
+		return err
+	}
+
+	for _, post := range entities {
+		if !strings.ContainsAny(post.ID, ":") {
+			continue
+		}
+
+		props := post.StripProps()
+
+		if post.IsDeleted {
+			if err := postLayer.execDelete(tx, deleteStmt, idField, props); err != nil {
+				return rollback(err)
+			}
+			continue
+		}
+
+		if err := postLayer.execDelete(tx, deleteStmt, idField, props); err != nil {
+			return rollback(err)
+		}
+
+		insertStmt, args, err := postLayer.buildInsertStatement(tableName, fields, props)
+		if err != nil {
+			return rollback(err)
+		}
+
+		if insertStmt == "" {
+			continue
+		}
+
+		if _, err = tx.ExecContext(postLayer.PostRepo.ctx, insertStmt, args...); err != nil {
+			postLayer.logger.Error(err)
+			return rollback(err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (postLayer *PostLayer) CreatePayload(post *Entity, fields []*conf.FieldMapping) ([]interface{}, error) {
+	columnValues, err := postLayer.columnValuesFromProps(post.StripProps(), fields)
+	if err != nil {
+		return nil, err
+	}
+	positional := make([]interface{}, len(columnValues))
+	for i, cv := range columnValues {
+		positional[i] = cv.value
+	}
+	return positional, nil
+}
+
+func (postLayer *PostLayer) columnValuesFromProps(props map[string]interface{}, fields []*conf.FieldMapping) ([]*columnValue, error) {
+	columnValues := make([]*columnValue, 0, len(fields))
+	for _, field := range fields {
+		cv, include, err := postLayer.buildColumnValue(field, props)
+		if err != nil {
+			return nil, err
+		}
+		if include {
+			columnValues = append(columnValues, cv)
+		}
+	}
+	return columnValues, nil
+}
+
+func (postLayer *PostLayer) buildColumnValue(field *conf.FieldMapping, props map[string]interface{}) (*columnValue, bool, error) {
+	var value interface{}
+	if propValue, ok := props[field.FieldName]; ok {
+		value = propValue
+	}
+	if field.ResolveNamespace && value != nil {
+		if strValue, ok := value.(string); ok {
+			value = uda.ToURI(postLayer.PostRepo.EntityContext, strValue)
+		}
+	}
+
+	converted, include, err := postLayer.convertFieldValue(field, value)
+	if err != nil {
+		return nil, false, err
+	}
+	if !include {
+		return nil, false, nil
+	}
+
+	return &columnValue{field: field, value: converted}, true, nil
+}
+
+func (postLayer *PostLayer) convertFieldValue(field *conf.FieldMapping, value interface{}) (interface{}, bool, error) {
+	datatype := strings.ToUpper(strings.Split(field.DataType, "(")[0])
+
+	if value == nil {
+		if !postLayer.PostRepo.PostTableDef.NullEmptyColumnValues {
+			return nil, false, nil
+		}
+		return nil, true, nil
+	}
+
+	switch datatype {
+	case "BIT":
+		boolValue, err := cast.ToBoolE(value)
+		if err != nil {
+			return nil, false, err
+		}
+		return boolValue, true, nil
+	case "INT", "SMALLINT", "TINYINT", "INTEGER", "BIGINT":
+		intValue, err := cast.ToInt64E(value)
+		if err != nil {
+			return nil, false, err
+		}
+		return intValue, true, nil
+	case "FLOAT", "DECIMAL", "NUMERIC", "REAL":
+		floatValue, err := cast.ToFloat64E(value)
+		if err != nil {
+			return nil, false, err
+		}
+		return floatValue, true, nil
+	case "DATETIME", "DATETIME2":
+		strValue := fmt.Sprintf("%v", value)
+		t, err := time.Parse(time.RFC3339, strValue)
+		if err != nil {
+			return nil, false, err
+		}
+		if location := postLayer.loadLocation(); location != nil {
+			t = t.In(location)
+		}
+		return t, true, nil
+	case "DATETIMEOFFSET":
+		strValue := fmt.Sprintf("%v", value)
+		t, err := time.Parse(time.RFC3339, strValue)
+		if err != nil {
+			return nil, false, err
+		}
+		return mssql.DateTimeOffset(t), true, nil
+	default:
+		return value, true, nil
+	}
+}
+
+func (postLayer *PostLayer) loadLocation() *time.Location {
+	if postLayer.PostRepo.PostTableDef == nil {
+		return nil
+	}
+	if postLayer.PostRepo.PostTableDef.TimeZone == "" {
+		return nil
+	}
+	location, err := time.LoadLocation(postLayer.PostRepo.PostTableDef.TimeZone)
+	if err != nil {
+		postLayer.logger.Warnf("failed loading location %s: %v", postLayer.PostRepo.PostTableDef.TimeZone, err)
+		return nil
+	}
+	return location
+}
+
+func (postLayer *PostLayer) lookupIDField(fields []*conf.FieldMapping) *conf.FieldMapping {
+	for _, field := range fields {
+		if strings.EqualFold(field.FieldName, postLayer.PostRepo.PostTableDef.IdColumn) {
+			return field
+		}
+	}
+	return nil
+}
+
+func (postLayer *PostLayer) execDelete(execer sqlExecer, stmt string, idField *conf.FieldMapping, props map[string]interface{}) error {
+	cv, include, err := postLayer.buildColumnValue(idField, props)
+	if err != nil {
+		return err
+	}
+	if !include {
+		return nil
+	}
+
+	_, err = execer.ExecContext(postLayer.PostRepo.ctx, stmt, cv.value)
 	if err != nil {
 		postLayer.logger.Error(err)
 	}
-	return nil
+	return err
 }
 
-func (postLayer *PostLayer) CustomDelete(post *Entity, fields []*conf.FieldMapping, s map[string]interface{}, rowId string, timeZone string, queryDel string) string {
-	delQueue := ""
-	if postLayer.PostRepo.PostTableDef.IdColumn == "" {
-		postLayer.logger.Warn(fmt.Sprintf("Cannot delete entitywhere Id-column is not specified:\t %s", post.ID))
-	} else {
-		for _, field := range fields {
-			var value interface{}
+func (postLayer *PostLayer) buildInsertStatement(tableName string, fields []*conf.FieldMapping, props map[string]interface{}) (string, []interface{}, error) {
+	columnNames := make([]string, 0, len(fields))
+	args := make([]interface{}, 0, len(fields))
 
-			propValue := s[field.FieldName]
-			if field.ResolveNamespace && propValue != nil {
-				value = uda.ToURI(postLayer.PostRepo.EntityContext, s[field.FieldName].(string))
-			} else {
-				value = propValue
-			}
-			datatype := strings.Split(field.DataType, "(")[0]
-
-			if field.FieldName == postLayer.PostRepo.PostTableDef.IdColumn {
-				switch datatype {
-				case "BIT":
-					bit := false
-					if value.(bool) {
-						bit = true
-					}
-					rowId += strconv.FormatBool(bit)
-				case "INT", "SMALLINT", "TINYINT", "INTEGER":
-					rowId += strconv.FormatInt(cast.ToInt64(value.(float64)), 10)
-				case "FLOAT", "DECIMAL", "NUMERIC":
-					rowId += fmt.Sprintf("%f", value)
-				case "DATETIME", "DATETIME2":
-					t, err := time.Parse(time.RFC3339, fmt.Sprintf("%s", value))
-					var location *time.Location
-					location, _ = time.LoadLocation(timeZone)
-					if err != nil {
-						log.Fatal("Couldn't parse datetime")
-					}
-					rowId += fmt.Sprintf("%s", t.In(location))
-				case "DATETIMEOFFSET":
-					t, err := time.Parse(time.RFC3339, fmt.Sprintf("%s", value))
-					if err != nil {
-						log.Fatal("Couldn't parse datetime")
-					}
-					rowId += fmt.Sprintf("%s", t)
-				default: // all other types can be sent as string
-					rowId += fmt.Sprintf("'%s'", value)
-				}
-			}
+	for _, field := range fields {
+		cv, include, err := postLayer.buildColumnValue(field, props)
+		if err != nil {
+			return "", nil, err
 		}
-		delQueue += queryDel + rowId + ";"
-	}
-	return delQueue
-}
-
-func (postLayer *PostLayer) UpsertBulk(entities []*Entity, fields []*conf.FieldMapping, queryDel string, idColumn string, timeZone string, tableName string) error {
-	buildQuery := postLayer.CreateUpsertBulk(entities, fields, queryDel, idColumn, timeZone, tableName)
-	if buildQuery == "" {
-		return fmt.Errorf("could not resolve datetime, error in creating stmt")
-	}
-	conn, err := postLayer.PostRepo.DB.Conn(postLayer.PostRepo.ctx)
-	if conn == nil {
-		postLayer.logger.Info("conn = nil")
-		return err
-	}
-	if err != nil {
-		return err
-	}
-	err = conn.PingContext(postLayer.PostRepo.ctx)
-	if err != nil {
-		postLayer.logger.Info("cannot ping")
-		return err
-	}
-	_, err = conn.ExecContext(postLayer.PostRepo.ctx, buildQuery)
-	if err != nil {
-		postLayer.logger.Info("cannot insert")
-
-		return err
-	}
-	err = conn.Close()
-	if err != nil {
-		postLayer.logger.Info("cannot close conn")
-
-	}
-
-	return nil
-}
-
-// TODO: Implement prepared statement for nullEmptyColumnValues = true
-
-func (postLayer *PostLayer) CreatePayload(post *Entity, fields []*conf.FieldMapping) []interface{} {
-	s := post.StripProps()
-	timeZone := postLayer.PostRepo.PostTableDef.TimeZone
-	args := make([]interface{}, len(fields))
-	columnValues := make([]any, 0)
-	for i, field := range fields {
-		var value interface{}
-
-		propValue := s[field.FieldName]
-		if field.ResolveNamespace && propValue != nil {
-			value = uda.ToURI(postLayer.PostRepo.EntityContext, s[field.FieldName].(string))
-		} else {
-			value = propValue
-		}
-		args[i] = value
-		datatype := strings.Split(field.DataType, "(")[0]
-		if value == nil {
-			if !postLayer.PostRepo.PostTableDef.NullEmptyColumnValues {
-				continue // TODO:Need to fail properly when this happens
-			}
-			columnValues = append(columnValues, getSqlNull(datatype))
-		} else {
-			switch datatype {
-			case "BIT":
-				bit := 0
-				if value.(bool) {
-					bit = 1
-				}
-				columnValues = append(columnValues, bit)
-			case "INT", "SMALLINT", "TINYINT", "INTEGER":
-				columnValues = append(columnValues, int64(value.(float64)))
-			case "FLOAT", "DECIMAL", "NUMERIC":
-				columnValues = append(columnValues, fmt.Sprintf("%f", value))
-			case "DATETIME", "DATETIME2":
-				t, err := time.Parse(time.RFC3339, fmt.Sprintf("%s", value))
-				var location *time.Location
-				location, _ = time.LoadLocation(timeZone)
-				if err != nil {
-					log.Fatal(err)
-				}
-				columnValues = append(columnValues, t.In(location))
-			case "DATETIMEOFFSET":
-				t, err := time.Parse(time.RFC3339, fmt.Sprintf("%s", value))
-				r := mssql.DateTimeOffset(t)
-				if err != nil {
-					log.Fatal(err)
-				}
-				columnValues = append(columnValues, r)
-			default: // all other types can be sent as string
-				columnValues = append(columnValues, fmt.Sprintf("%s", value))
-			}
-		}
-	}
-	return columnValues
-}
-
-func getSqlNull(datatype string) any {
-	switch datatype {
-	case "VARCHAR":
-		return sql.NullString{}
-	case "BIT":
-		return sql.NullBool{}
-	case "INT", "SMALLINT", "TINYINT", "INTEGER":
-		return sql.NullInt64{}
-	case "DATETIME", "DATETIME2", "DATETIMEOFFSET":
-		return sql.NullTime{}
-	case "FLOAT", "DECIMAL", "NUMERIC":
-		return sql.NullBool{}
-	default:
-		return sql.RawBytes{}
-	}
-}
-func (postLayer *PostLayer) CreateUpsertBulk(entities []*Entity, fields []*conf.FieldMapping, queryDel string, idColumn string, timeZone string, tableName string) string {
-	buildQuery := ""
-	for _, post := range entities {
-		if !strings.ContainsAny(post.ID, ":") {
+		if !include {
 			continue
 		}
-		s := post.StripProps()
-		args := make([]interface{}, len(fields))
-		columnValues := ""
-		rowId := ""
-		InsertColumnNamesValues := ""
-		if !post.IsDeleted { //If is deleted True just create the delete statement
-			buildQuery += postLayer.createDelete(s, idColumn, fields, tableName)
-			buildQuery += fmt.Sprintf("INSERT INTO %s (", strings.ToLower(tableName))
-			for i, field := range fields {
-				var value interface{}
-
-				propValue := s[field.FieldName]
-				if field.ResolveNamespace && propValue != nil {
-					value = uda.ToURI(postLayer.PostRepo.EntityContext, s[field.FieldName].(string))
-				} else {
-					value = propValue
-				}
-				args[i] = value
-				datatype := strings.Split(field.DataType, "(")[0]
-				if value == nil {
-					if !postLayer.PostRepo.PostTableDef.NullEmptyColumnValues {
-						continue // TODO:Need to fail properly when this happens
-					}
-					columnValues += cast.ToString(getSqlNull(datatype)) + ","
-				} else {
-					switch datatype {
-					case "BIT":
-						bit := "0"
-						if value.(bool) {
-							bit = "1"
-						}
-						columnValues += bit + ","
-					case "INT", "SMALLINT", "TINYINT", "INTEGER":
-						columnValues += strconv.FormatInt(cast.ToInt64(value.(float64)), 10) + ","
-					case "FLOAT", "DECIMAL", "NUMERIC":
-						columnValues += fmt.Sprintf("%f", value) + ","
-					case "DATETIME", "DATETIME2":
-						t, err := time.Parse(time.RFC3339, fmt.Sprintf("%s", value))
-						var location *time.Location
-						location, _ = time.LoadLocation(timeZone)
-						if err != nil {
-							return ""
-						}
-						time := fmt.Sprintf("%s", t.In(location).Format("2006-01-02T15:04:05"))
-						columnValues += "'" + time + "',"
-					case "DATETIMEOFFSET":
-						columnValues += "'" + fmt.Sprintf("%s", value) + "',"
-					default: // all other types can be sent as string
-						columnValues += fmt.Sprintf("'%s',", value)
-					}
-				}
-				if field.FieldName == idColumn {
-					rowId = strings.TrimRight(columnValues, ",")
-				}
-				InsertColumnNamesValues += fmt.Sprintf("%s, ", field.FieldName)
-
-			}
-			columnValues = columnValues[:len(columnValues)-1]
-			InsertColumnNamesValues = strings.TrimRight(InsertColumnNamesValues, ", ")
-			buildQuery += fmt.Sprintf("%s ) VALUES ( %s );", InsertColumnNamesValues, columnValues)
-		} else {
-			for _, field := range fields {
-				var value interface{}
-
-				propValue := s[field.FieldName]
-				if field.ResolveNamespace && propValue != nil {
-					value = uda.ToURI(postLayer.PostRepo.EntityContext, s[field.FieldName].(string))
-				} else {
-					value = propValue
-				}
-				datatype := strings.Split(field.DataType, "(")[0]
-
-				if field.FieldName == idColumn {
-					switch datatype {
-					case "BIT":
-						bit := "0"
-						if value.(bool) {
-							bit = "1"
-						}
-						rowId += bit
-					case "INT", "BIGINT", "SMALLINT", "TINYINT", "INTEGER":
-						rowId += strconv.FormatInt(cast.ToInt64(value.(float64)), 10)
-					case "FLOAT", "DECIMAL", "NUMERIC":
-						rowId += fmt.Sprintf("%f", value)
-					case "DATETIME", "DATETIME2":
-						t, err := time.Parse(time.RFC3339, fmt.Sprintf("%s", value))
-						var location *time.Location
-						location, _ = time.LoadLocation(timeZone)
-						if err != nil {
-							return ""
-						}
-						time := fmt.Sprintf("%s", t.In(location).Format("2006-01-02T15:04:05"))
-						rowId += "'" + time + "',"
-					case "DATETIMEOFFSET":
-						rowId += "'" + fmt.Sprintf("%s", value) + "',"
-					default: // all other types can be sent as string
-						rowId += fmt.Sprintf("'%s'", value)
-					}
-				}
-			}
-			buildQuery += queryDel + rowId + ";"
-		}
+		columnNames = append(columnNames, field.FieldName)
+		args = append(args, cv.value)
 	}
-	return buildQuery
+
+	if len(columnNames) == 0 {
+		return "", nil, nil
+	}
+
+	placeholders := make([]string, len(columnNames))
+	for i := range placeholders {
+		placeholders[i] = "?"
+	}
+
+	stmt := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", tableName, strings.Join(columnNames, ", "), strings.Join(placeholders, ", "))
+	return stmt, args, nil
 }
 
+func prepareArguments(query string, values []*columnValue) ([]interface{}, error) {
+	matches := parameterPattern.FindAllStringSubmatch(query, -1)
+	if len(matches) == 0 {
+		args := make([]interface{}, len(values))
+		for i, value := range values {
+			args[i] = value.value
+		}
+		return args, nil
+	}
+
+	columnMap := make(map[string]interface{}, len(values))
+	for _, value := range values {
+		columnMap[strings.ToLower(value.field.FieldName)] = value.value
+	}
+
+	args := make([]interface{}, 0, len(matches))
+	for _, match := range matches {
+		name := match[1]
+		lookup := strings.ToLower(name)
+		fieldKey := lookup
+
+		if strings.HasPrefix(lookup, "p") {
+			candidate := lookup[1:]
+			if idx, err := strconv.Atoi(candidate); err == nil {
+				if idx >= 1 && idx <= len(values) {
+					args = append(args, sql.Named(name, values[idx-1].value))
+					continue
+				}
+			}
+
+			if _, ok := columnMap[candidate]; ok {
+				fieldKey = candidate
+			}
+		}
+
+		if val, ok := columnMap[fieldKey]; ok {
+			args = append(args, sql.Named(name, val))
+			continue
+		}
+
+		return nil, fmt.Errorf("no value provided for parameter %s", name)
+	}
+
+	return args, nil
+}
 func (postLayer *PostLayer) GetTableDefinition(datasetName string) *conf.PostMapping {
 	for _, table := range postLayer.Cmgr.Datalayer.PostMappings {
 		if table.DatasetName == datasetName {
@@ -431,48 +446,6 @@ func (postLayer *PostLayer) GetTableDefinition(datasetName string) *conf.PostMap
 		}
 	}
 	return nil
-}
-
-func (postLayer *PostLayer) createDelete(s map[string]interface{}, idColumn string, fields []*conf.FieldMapping, tableName string) string {
-	var value interface{}
-	for _, field := range fields {
-		if field.FieldName == idColumn {
-			propValue := s[field.FieldName]
-
-			if field.ResolveNamespace && propValue != nil {
-				value = uda.ToURI(postLayer.PostRepo.EntityContext, s[field.FieldName].(string))
-			} else {
-				value = propValue
-			}
-
-			datatype := strings.Split(field.DataType, "(")[0]
-			if value == nil {
-				if !postLayer.PostRepo.PostTableDef.NullEmptyColumnValues {
-					continue // TODO:Need to fail properly when this happens
-				}
-				value = cast.ToString(getSqlNull(datatype))
-			} else {
-				switch datatype {
-				case "BIT":
-					bit := "0"
-					if value.(bool) {
-						bit = "1"
-					}
-					value = bit
-				case "INT", "SMALLINT", "TINYINT", "INTEGER":
-					value = strconv.FormatInt(cast.ToInt64(value.(float64)), 10)
-				case "FLOAT", "DECIMAL", "NUMERIC":
-					value = fmt.Sprintf("%f", value)
-				default: // all other types can be sent as string
-					value = fmt.Sprintf("'%s'", value)
-				}
-			}
-
-		}
-	}
-
-	deleteStmt := fmt.Sprintf("DELETE FROM %s WHERE %s = %s"+";", tableName, idColumn, value)
-	return deleteStmt
 }
 
 func (postLayer *PostLayer) setVars() (string, string, string, string, []*conf.FieldMapping) {
