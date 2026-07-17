@@ -3,7 +3,7 @@ package middlewares
 import (
 	"encoding/json"
 	"errors"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"strings"
 	"time"
@@ -34,7 +34,7 @@ type CustomClaims struct {
 	Scope string `json:"scope"`
 	Gty   string `json:"gty"`
 	Adm   bool   `json:"adm"`
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 }
 
 func (claims CustomClaims) scopes() []string {
@@ -61,9 +61,7 @@ type JSONWebKeys struct {
 // Errors
 var (
 	ErrJWTMissing = echo.NewHTTPError(http.StatusBadRequest, "missing or malformed jwt")
-	parser        = jwt.Parser{
-		ValidMethods: []string{"RS256"},
-	}
+	parser        = jwt.NewParser(jwt.WithValidMethods([]string{"RS256"}))
 )
 
 func newCache(wellknown string) cache.LoadingCache {
@@ -139,13 +137,11 @@ func JWTHandler(config *Auth0Config) echo.MiddlewareFunc {
 				issuer = config.Issuer
 			}
 
-			checkAud := claims.VerifyAudience(audience, false)
-			if !checkAud {
+			if !verifyAudience(claims.Audience, audience) {
 				err = errors.New("invalid audience")
 			}
 
-			checkIss := claims.VerifyIssuer(issuer, false)
-			if !checkIss {
+			if !verifyIssuer(claims.Issuer, issuer) {
 				err = errors.New("invalid issuer")
 			}
 
@@ -201,6 +197,26 @@ func getPemCert(token *jwt.Token, config *Auth0Config) (string, error) {
 		return cert, err
 	}
 
+}
+
+// verifyAudience mirrors the removed jwt v3 VerifyAudience(cmp, false): an empty
+// audience is accepted, otherwise cmp must be one of the token's audiences.
+func verifyAudience(aud jwt.ClaimStrings, cmp string) bool {
+	if len(aud) == 0 {
+		return true
+	}
+	for _, a := range aud {
+		if a == cmp {
+			return true
+		}
+	}
+	return false
+}
+
+// verifyIssuer mirrors the removed jwt v3 VerifyIssuer(cmp, false): an empty
+// issuer is accepted, otherwise it must equal cmp.
+func verifyIssuer(iss, cmp string) bool {
+	return iss == "" || iss == cmp
 }
 
 func extractToken(c echo.Context) (string, error) {
