@@ -148,13 +148,15 @@ func TestUpsertBulk(t *testing.T) {
 			}
 			pl.PostRepo.PostTableDef = datalayer.PostMappings[0]
 
-			query, err := (*layers.PostLayer).CreateUpsertBulk(pl, entities, pl.PostRepo.PostTableDef.FieldMappings, "DELETE FROM test WHERE Id = ", "Id", "Europe/Oslo", "test")
+			// Etc/GMT-1 is a fixed +01:00 zone with no LMT entry. A named zone such as Europe/Oslo would
+			// resolve pre-1895 dates through local mean time, whose offset differs between tzdata releases.
+			query, err := (*layers.PostLayer).CreateUpsertBulk(pl, entities, pl.PostRepo.PostTableDef.FieldMappings, "DELETE FROM test WHERE Id = ", "Id", "Etc/GMT-1", "test")
 			g.Assert(err).IsNil()
 			resultSlice := strings.Split(query, ";")
 
 			// DATETIME starts at 1753-01-01, so the zero time is out of range; DATETIME2 starts at 0001-01-01 and keeps it
-			g.Assert(resultSlice[1]).Eql("INSERT INTO test (Id, Column_Datetime, Column_Datetime2 ) VALUES ( 'a:5',NULL,'0001-01-01T00:53:28' )")
-			// both types end at 9999-12-31, and the Oslo offset pushes this past that
+			g.Assert(resultSlice[1]).Eql("INSERT INTO test (Id, Column_Datetime, Column_Datetime2 ) VALUES ( 'a:5',NULL,'0001-01-01T01:00:00' )")
+			// both types end at 9999-12-31, and the +01:00 offset pushes this past that
 			g.Assert(resultSlice[3]).Eql("INSERT INTO test (Id, Column_Datetime, Column_Datetime2 ) VALUES ( 'a:6',NULL,NULL )")
 		})
 		g.It("Should null out-of-range datetimes in the parameterised payload", func() {
