@@ -1,0 +1,27 @@
+{
+    "baseNameSpace": "http://data.mimiro.io/test/",
+    "baseUri": "http://data.mimiro.io/test/",
+    "database": "MYDB1",
+    "databaseServer": "localhost",
+    "id": "test",
+    "password": "Test1234",
+    "user": "sa",
+    "port": "1433",
+    "postMappings": [
+        {
+            "datasetName": "test.Sql",
+            "fieldMappings": [
+                {
+                    "fieldName": "Column_Datetime",
+                    "order": 1,
+                    "dataType": "DATETIME"
+                }
+            ],
+            "query": "upsertBulk",
+            "tableName": "test",
+            "batchSize": 10000,
+            "workers": 20,
+            "timezone": "Europe/Oslo",
+            "idColumn": "Column_Datetime"
+        }]
+}

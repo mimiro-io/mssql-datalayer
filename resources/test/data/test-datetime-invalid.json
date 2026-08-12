@@ -1,0 +1,18 @@
+[
+    {
+        "id": "@context",
+        "namespaces": {
+            "a": "http://data/base",
+            "b": "http://external/base"
+        }
+    },
+    {
+        "id": "a:7",
+        "deleted": false,
+        "recorded": 12351591859,
+        "props": {
+            "a:Id": "a:7",
+            "b:Column_Datetime": "not-a-datetime"
+        }
+    }
+]

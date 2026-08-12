@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -132,11 +131,20 @@ func (postLayer *PostLayer) CustomQuery(entities []*Entity, query string, fields
 		timeZone := postLayer.PostRepo.PostTableDef.TimeZone
 		// put deleted in to own queue that fires at the end of batch.
 		if post.IsDeleted {
-			delQueue += postLayer.CustomDelete(post, fields, s, rowId, timeZone, queryDel)
+			del, err := postLayer.CustomDelete(post, fields, s, rowId, timeZone, queryDel)
+			if err != nil {
+				postLayer.logger.Error(err)
+				return err
+			}
+			delQueue += del
 		} else {
-			payloadValues := postLayer.CreatePayload(post, fields)
+			payloadValues, err := postLayer.CreatePayload(post, fields)
+			if err != nil {
+				postLayer.logger.Error(err)
+				return err
+			}
 			postLayer.logger.Debug(payloadValues)
-			_, err := postLayer.PostRepo.DB.Exec(query, payloadValues...)
+			_, err = postLayer.PostRepo.DB.Exec(query, payloadValues...)
 			if err != nil {
 				postLayer.logger.Error(err)
 				return err
@@ -151,11 +159,15 @@ func (postLayer *PostLayer) CustomQuery(entities []*Entity, query string, fields
 	return nil
 }
 
-func (postLayer *PostLayer) CustomDelete(post *Entity, fields []*conf.FieldMapping, s map[string]interface{}, rowId string, timeZone string, queryDel string) string {
+func (postLayer *PostLayer) CustomDelete(post *Entity, fields []*conf.FieldMapping, s map[string]interface{}, rowId string, timeZone string, queryDel string) (string, error) {
 	delQueue := ""
 	if postLayer.PostRepo.PostTableDef.IdColumn == "" {
 		postLayer.logger.Warn(fmt.Sprintf("Cannot delete entitywhere Id-column is not specified:\t %s", post.ID))
 	} else {
+		location, err := loadLocation(timeZone)
+		if err != nil {
+			return "", err
+		}
 		for _, field := range fields {
 			var value interface{}
 
@@ -181,16 +193,14 @@ func (postLayer *PostLayer) CustomDelete(post *Entity, fields []*conf.FieldMappi
 					rowId += fmt.Sprintf("%f", value)
 				case "DATETIME", "DATETIME2":
 					t, err := time.Parse(time.RFC3339, fmt.Sprintf("%s", value))
-					var location *time.Location
-					location, _ = time.LoadLocation(timeZone)
 					if err != nil {
-						log.Fatal("Couldn't parse datetime")
+						return "", parseError(field.FieldName, datatype, value, post.ID, err)
 					}
 					rowId += fmt.Sprintf("%s", t.In(location))
 				case "DATETIMEOFFSET":
 					t, err := time.Parse(time.RFC3339, fmt.Sprintf("%s", value))
 					if err != nil {
-						log.Fatal("Couldn't parse datetime")
+						return "", parseError(field.FieldName, datatype, value, post.ID, err)
 					}
 					rowId += fmt.Sprintf("%s", t)
 				default: // all other types can be sent as string
@@ -200,13 +210,16 @@ func (postLayer *PostLayer) CustomDelete(post *Entity, fields []*conf.FieldMappi
 		}
 		delQueue += queryDel + rowId + ";"
 	}
-	return delQueue
+	return delQueue, nil
 }
 
 func (postLayer *PostLayer) UpsertBulk(entities []*Entity, fields []*conf.FieldMapping, queryDel string, idColumn string, timeZone string, tableName string) error {
-	buildQuery := postLayer.CreateUpsertBulk(entities, fields, queryDel, idColumn, timeZone, tableName)
-	if buildQuery == "" {
-		return fmt.Errorf("could not resolve datetime, error in creating stmt")
+	buildQuery, err := postLayer.CreateUpsertBulk(entities, fields, queryDel, idColumn, timeZone, tableName)
+	if err != nil {
+		return err
+	}
+	if buildQuery == "" { // every entity in the batch was skipped, nothing to execute
+		return nil
 	}
 	conn, err := postLayer.PostRepo.DB.Conn(postLayer.PostRepo.ctx)
 	if conn == nil {
@@ -238,9 +251,13 @@ func (postLayer *PostLayer) UpsertBulk(entities []*Entity, fields []*conf.FieldM
 
 // TODO: Implement prepared statement for nullEmptyColumnValues = true
 
-func (postLayer *PostLayer) CreatePayload(post *Entity, fields []*conf.FieldMapping) []interface{} {
+func (postLayer *PostLayer) CreatePayload(post *Entity, fields []*conf.FieldMapping) ([]interface{}, error) {
 	s := post.StripProps()
 	timeZone := postLayer.PostRepo.PostTableDef.TimeZone
+	location, err := loadLocation(timeZone)
+	if err != nil {
+		return nil, err
+	}
 	args := make([]interface{}, len(fields))
 	columnValues := make([]any, 0)
 	for i, field := range fields {
@@ -273,25 +290,60 @@ func (postLayer *PostLayer) CreatePayload(post *Entity, fields []*conf.FieldMapp
 				columnValues = append(columnValues, fmt.Sprintf("%f", value))
 			case "DATETIME", "DATETIME2":
 				t, err := time.Parse(time.RFC3339, fmt.Sprintf("%s", value))
-				var location *time.Location
-				location, _ = time.LoadLocation(timeZone)
 				if err != nil {
-					log.Fatal(err)
+					return nil, parseError(field.FieldName, datatype, value, post.ID, err)
 				}
-				columnValues = append(columnValues, t.In(location))
+				ts := t.In(location)
+				if !datetimeInRange(datatype, ts) {
+					postLayer.warnOutOfRange(field.FieldName, datatype, value, post.ID)
+					columnValues = append(columnValues, sql.NullTime{})
+				} else {
+					columnValues = append(columnValues, ts)
+				}
 			case "DATETIMEOFFSET":
 				t, err := time.Parse(time.RFC3339, fmt.Sprintf("%s", value))
-				r := mssql.DateTimeOffset(t)
 				if err != nil {
-					log.Fatal(err)
+					return nil, parseError(field.FieldName, datatype, value, post.ID, err)
 				}
-				columnValues = append(columnValues, r)
+				columnValues = append(columnValues, mssql.DateTimeOffset(t))
 			default: // all other types can be sent as string
 				columnValues = append(columnValues, fmt.Sprintf("%s", value))
 			}
 		}
 	}
-	return columnValues
+	return columnValues, nil
+}
+
+// loadLocation resolves the configured timezone. LoadLocation hands back a nil *Location for an
+// unknown zone and Time.In panics on that, so the error has to be surfaced rather than dropped.
+func loadLocation(timeZone string) (*time.Location, error) {
+	location, err := time.LoadLocation(timeZone)
+	if err != nil {
+		return nil, fmt.Errorf("unknown timezone %q in post mapping: %w", timeZone, err)
+	}
+	return location, nil
+}
+
+func parseError(fieldName string, datatype string, value interface{}, entityID string, err error) error {
+	return fmt.Errorf("could not parse %s value %v for column %s of entity %s: %w", datatype, value, fieldName, entityID, err)
+}
+
+// datetimeInRange reports whether t fits the target column type. SQL Server's legacy DATETIME only
+// reaches back to 1753-01-01 while DATETIME2 starts at 0001-01-01; both stop at 9999-12-31. A value
+// outside the range makes the server reject the whole batch, so callers write NULL instead.
+func datetimeInRange(datatype string, t time.Time) bool {
+	minYear := 1
+	if datatype == "DATETIME" {
+		minYear = 1753
+	}
+	return t.Year() >= minYear && t.Year() <= 9999
+}
+
+func (postLayer *PostLayer) warnOutOfRange(fieldName string, datatype string, value interface{}, entityID string) {
+	if postLayer.logger == nil { // CreatePayload and CreateUpsertBulk are exercised without one
+		return
+	}
+	postLayer.logger.Warnf("%s value %v is outside the %s range, writing NULL for entity %s", fieldName, value, datatype, entityID)
 }
 
 func getSqlNull(datatype string) any {
@@ -310,7 +362,11 @@ func getSqlNull(datatype string) any {
 		return sql.RawBytes{}
 	}
 }
-func (postLayer *PostLayer) CreateUpsertBulk(entities []*Entity, fields []*conf.FieldMapping, queryDel string, idColumn string, timeZone string, tableName string) string {
+func (postLayer *PostLayer) CreateUpsertBulk(entities []*Entity, fields []*conf.FieldMapping, queryDel string, idColumn string, timeZone string, tableName string) (string, error) {
+	location, err := loadLocation(timeZone)
+	if err != nil {
+		return "", err
+	}
 	buildQuery := ""
 	for _, post := range entities {
 		if !strings.ContainsAny(post.ID, ":") {
@@ -339,7 +395,7 @@ func (postLayer *PostLayer) CreateUpsertBulk(entities []*Entity, fields []*conf.
 					if !postLayer.PostRepo.PostTableDef.NullEmptyColumnValues {
 						continue // TODO:Need to fail properly when this happens
 					}
-					columnValues += cast.ToString(getSqlNull(datatype)) + ","
+					columnValues += "NULL," // raw SQL, so the null is the literal, not a stringified sql.Null*
 				} else {
 					switch datatype {
 					case "BIT":
@@ -354,13 +410,16 @@ func (postLayer *PostLayer) CreateUpsertBulk(entities []*Entity, fields []*conf.
 						columnValues += fmt.Sprintf("%f", value) + ","
 					case "DATETIME", "DATETIME2":
 						t, err := time.Parse(time.RFC3339, fmt.Sprintf("%s", value))
-						var location *time.Location
-						location, _ = time.LoadLocation(timeZone)
 						if err != nil {
-							return ""
+							return "", parseError(field.FieldName, datatype, value, post.ID, err)
 						}
-						time := fmt.Sprintf("%s", t.In(location).Format("2006-01-02T15:04:05"))
-						columnValues += "'" + time + "',"
+						ts := t.In(location)
+						if !datetimeInRange(datatype, ts) {
+							postLayer.warnOutOfRange(field.FieldName, datatype, value, post.ID)
+							columnValues += "NULL,"
+						} else {
+							columnValues += "'" + ts.Format("2006-01-02T15:04:05") + "',"
+						}
 					case "DATETIMEOFFSET":
 						columnValues += "'" + fmt.Sprintf("%s", value) + "',"
 					default: // all other types can be sent as string
@@ -402,13 +461,10 @@ func (postLayer *PostLayer) CreateUpsertBulk(entities []*Entity, fields []*conf.
 						rowId += fmt.Sprintf("%f", value)
 					case "DATETIME", "DATETIME2":
 						t, err := time.Parse(time.RFC3339, fmt.Sprintf("%s", value))
-						var location *time.Location
-						location, _ = time.LoadLocation(timeZone)
 						if err != nil {
-							return ""
+							return "", parseError(field.FieldName, datatype, value, post.ID, err)
 						}
-						time := fmt.Sprintf("%s", t.In(location).Format("2006-01-02T15:04:05"))
-						rowId += "'" + time + "',"
+						rowId += "'" + t.In(location).Format("2006-01-02T15:04:05") + "',"
 					case "DATETIMEOFFSET":
 						rowId += "'" + fmt.Sprintf("%s", value) + "',"
 					default: // all other types can be sent as string
@@ -419,7 +475,7 @@ func (postLayer *PostLayer) CreateUpsertBulk(entities []*Entity, fields []*conf.
 			buildQuery += queryDel + rowId + ";"
 		}
 	}
-	return buildQuery
+	return buildQuery, nil
 }
 
 func (postLayer *PostLayer) GetTableDefinition(datasetName string) *conf.PostMapping {
